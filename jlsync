@@ -1,5 +1,11 @@
 #!/usr/bin/perl -w
 
+# deploy - not yet useable
+#
+# Jason Lee, deploy@jason-lee.net.au, March 2002
+#
+# $id$
+
 use strict;
 use File::Find ();
 use File::Path;
