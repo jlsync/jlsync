@@ -1,0 +1,68 @@
+#!/usr/bin/perl
+
+
+use strict;
+use File::Find ();
+
+# for the convenience of &wanted calls, including -eval statements:
+use vars qw/*name *dir *prune/;
+*name   = *File::Find::name;
+*dir    = *File::Find::dir;
+*prune  = *File::Find::prune;
+
+
+#
+my $mask = $ARGV[0];
+my @ignorefiles;
+
+
+# Traverse desired filesystems
+File::Find::find({wanted => \&delete}, '/tmp/spit');
+File::Find::find({wanted => \&rename}, '/tmp/spit');
+File::Find::find({wanted => \&ignore}, '/tmp/spit');
+
+print "ignore files are:\n" . join ("\n",@ignorefiles) . "\n";
+exit;
+
+
+sub delete {
+	if ( /^(.*)\.$mask\.d~\z/s )
+	{
+		my $target = $1;
+		my $fullpathname = $dir . "/" .  $target;
+		print("$fullpathname\n");
+		# chdir $dir; 
+		# system 'rm','-rf',$target ; 
+		#(unlink($_) || warn "$name: $!\n") &&
+		print("$name\n");
+	}
+}
+
+sub rename {
+	if ( /^.*\.$mask\.~\z/s )
+	{
+		my $target = $1;
+		my $fullpathname = $dir . "/" .  $target;
+		print("$fullpathname\n");
+		# chdir $dir; 
+		# system 'rm','-rf',$1 ; 
+		# rename $file, $target;
+		#(unlink($_) || warn "$name: $!\n") &&
+		print("$name\n");
+	}
+}
+
+sub rename {
+	if ( /^.*\.$mask\.i~\z/s )
+	{
+		my $target = $1;
+		my $fullpathname = $dir . "/" .  $target;
+		print("$fullpathname\n");
+		# chdir $dir; 
+		push (@ignorefiles, $fullpathname);
+		print("$name\n");
+	}
+}
+
+
+

@@ -1,0 +1,34 @@
+#!/bin/bash 
+
+# scdiff, Jason Lee, May 2004
+#
+# usage: scdiff host1:/path/to/file  host2:/path/to/file
+#
+# 
+
+
+hf1=$1
+hf2=$2
+
+h1=`echo $hf1 | cut -f1 -d:`
+f1=`echo $hf1 | cut -f2 -d:`
+fd1=`dirname $f1`
+fb1=`basename $f1`
+
+h2=`echo $hf2 | cut -f1 -d:`
+f2=`echo $hf2 | cut -f2 -d:`
+fd2=`dirname $f2`
+fb2=`basename $f2`
+
+printf "\033[1;31m"
+echo $h1:$f1
+/usr/local/bin/ssh $h1 "cd $fd1 ; ls -l $fb1"
+
+printf "\033[1;34m"
+echo $h2:$f2
+/usr/local/bin/ssh $h2 "cd $fd2 ; ls -l $fb2"
+
+printf "\033[0;0m"
+
+/software/extras/colordiff.pl --no-banner <(/usr/local/bin/ssh $h1 cat $f1) <(/usr/local/bin/ssh $h2 cat $f2)
+

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+diff <(ssh -n george cat /etc/passwd) <(ssh -n kramer cat /etc/passwd)
+
