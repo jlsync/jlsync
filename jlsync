@@ -4,7 +4,9 @@
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $Id: jlsync,v 1.11 2004/06/22 11:15:57 plastic Exp $
+# Copyright © 2002-2004 Jason Lee
+#
+# $Id: jlsync,v 1.12 2004/06/22 17:02:43 plastic Exp $
 
 =head1 NAME
 
