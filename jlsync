@@ -4,7 +4,7 @@
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $Id: jlsync,v 1.8 2004/05/21 16:36:29 plastic Exp $
+# $Id: jlsync,v 1.9 2004/06/01 10:30:08 plastic Exp $
 
 =head1 NAME
 
@@ -36,12 +36,15 @@ First run
 
 this will build the staging image and the do a pretend rsync to jav04
 with the --dry-run rsync option. Look closely at the output and verify
-the additions and deletions on the remote host are as expected. If
-everything is okay, then run
+the additions and deletions on the remote host are as expected. You 
+will then be prompted with "would your like run rsync now for 
+real? [yes/No]". Answer yes to run rsync again without 
+the --dry-run rysnc option. Only if you're 100% sure that deploy is going add and delete the correct files you can run with the --real option
 
 	deploy --real jav04:/usr/java
 
-when the --real option is used the rsync to the client does not use the
+when the --real option you are not prompted and rsync to the 
+client does not use the
 --dry-run option. BE CAREFUL, incorrect usage or incorrect
 configuration in the repository could easily result in the permanent
 deletion of important files on the client.
@@ -57,7 +60,8 @@ repostory for the file template "webservers" run
 	deloy --get --mask=webservers web01:/usr/local/apache/bin/httpd
 
 once the file is in the repository it can be deployed to other clients
-that subscribe to the webservers template.
+that subscribe to the webservers template. This will result in 
+usr/local/apache/bin/httpd.webservers.a~ being added to the repostitory.
 
 =head2 The config file
 
@@ -72,10 +76,14 @@ Every client must subscribe to the base template called DEFAULT.  Also
 each client also subscribes to a template that is the same as that
 client's hostname.
 
-Templates are layered one upon another to build the deploy image in the
-staging area before the image is rsync'ed to the client. Templates (and
-their associated control files) are applied in the same order as they
-are listed in the control file, ie. left to right.
+Templates filesets are layered one upon another to build the 
+deploy image in the
+staging area before the image is rsync'ed to the client. 
+The control files for templates are applied in reverse same order as they
+are listed in the control file, ie. right to left. When multiple control 
+files exist with the same basename exist the most significate control 
+file is used. The hostname control files are always the most significant
+ and the DEFAULT control files are always the least significant.
 
 The following example deploy.config entry shows a host, jav04, entry
 that only contains the minimum of the DEFAULT template and it's own
@@ -104,19 +112,12 @@ Files and/or directories from the repository for a given template with
 with Add control file suffix, .templatename.a~ , get added to the final
 file image to be deloyed to the client.
 
-If a file/directory with same basename already exists in the file image
-(say from the DEFAULT template, or an earlier applied template) as a
-Add controlfile it will be overwritten. In this instance it's useful to
-think of Add controlfiles as a type of "replace" control file.
 
 =head3 the Delete .templatename.d~ controlfile
 
-If a file/directory exists in the file image (say from the DEFAULT
-template, or an earlier applied template) that should not be in the
-final file image for deployment to the client a Delete controlfile can
-be used to remove it. 
+If file with the Delete control file suffix exists in the 
+repository then any corresponding file or directory with the same basename will not be added the file image the the staging area for that client. 
 
-Delete control files remove files from the final stageing area image.
 Rsync will delete files on remote hosts that aren't found in the local
 file image (that is unless they have also been excluded from the rsync
 comparision).
@@ -165,8 +166,7 @@ of the template) use something like
 	friendly remote diff/cmp ?
 	pager
 	use File::Same
-	use --update ?
-	use --backup ?
+	use more rysnc options. --update ?  --backup ?
 
 =head1 BUGS
 
@@ -339,7 +339,8 @@ sub filtercontrolfiles {
 		{
 			print "a is $a\n" if $verbose;
 			(my $basename = $a) =~ s/.$mask.a~$//;
-			@newlist = grep !/^\Q$basename\E/,@newlist;
+			@newlist = grep !/^\Q$basename\E$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w+\.[ade]\~$/,@newlist;
 			push (@newlist,$a);
 		}
 
@@ -349,7 +350,8 @@ sub filtercontrolfiles {
 		{
 			print "d is $d\n" if $verbose;
 			(my $basename = $d) =~ s/.$mask.d~$//;
-			@newlist = grep !/^\Q$basename\E/,@newlist;
+			@newlist = grep !/^\Q$basename\E$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w+\.[ade]\~$/,@newlist;
 		}
 
 		my @elist = grep  /.$mask.e~$/  , @newlist;
@@ -358,7 +360,8 @@ sub filtercontrolfiles {
 		{
 			print "e is $e\n" if $verbose;
 			(my $basename = $e) =~ s/.$mask.e~$//;
-			@newlist = grep !/^\Q$basename\E/,@newlist;
+			@newlist = grep !/^\Q$basename\E$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w+\.[ade]\~$/,@newlist;
 			push (@excludepatterns, $dir ."/". $basename);
 		}
 	}
