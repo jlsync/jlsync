@@ -4,7 +4,7 @@
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $Id: jlsync,v 1.10 2004/06/01 16:56:51 plastic Exp $
+# $Id: jlsync,v 1.11 2004/06/22 11:15:57 plastic Exp $
 
 =head1 NAME
 
@@ -553,7 +553,7 @@ sub get
 	# now copy files from destination back into staging 
 	# - no could overwrite contents of hard linked files?
 
-	my $command = "$rsync --compress --archive --rsh=/usr/local/bin/ssh --exclude-from=$excludepatternfile --delete   --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
+	my $command = "$rsync --compress --archive --rsh=/usr/local/bin/ssh  --rsync-path=/usr/local/bin/rsync --exclude-from=$excludepatternfile --delete   --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
 
 	print "running " . &ccode("green") . $command . &ccode("default") ."\n";
 	system $command;
