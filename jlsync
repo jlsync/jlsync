@@ -4,7 +4,7 @@
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $Id: jlsync,v 1.6 2004/05/21 14:42:20 plastic Exp $
+# $Id: jlsync,v 1.7 2004/05/21 15:22:02 plastic Exp $
 
 =head1 NAME
 
@@ -168,6 +168,9 @@ of the template) use something like
 	use --update ?
 	use --backup ?
 
+=head1 BUGS
+
+	--get ting a symlink
 
 =head1 SEE ALSO
 
@@ -304,7 +307,7 @@ sub buildstage
 
 	my $command;
 	system "/bin/rm -rf $stg/$client"; if ( $? !=0 ) {  die "could not /bin/rm -rf $stg/$client"; }
-	mkdir "$stg/$client" or die "could not mkdir $stg/$client";
+	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
 
 	chdir $src;
 	print "pwd is now $src (repository area root)\n";
@@ -622,14 +625,14 @@ sub get
 
 	if ( $real )
 	{
-		$verbose=1;
+		print "updating $target ... ";
 		print "rmtree($target)\n" if ($verbose);
 		rmtree($target); 
 		print "mkdir -p " . dirname($target) . "\n" if ($verbose);
 		system "mkdir","-p",dirname($target);
 		print "rename($stggettmppath, $target)\n" if ($verbose);
 		rename($stggettmppath, $target) || die "unable to rename $stggettmp to $target";
-
+		print "done.\n";
 	}
 
 
