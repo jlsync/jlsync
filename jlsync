@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.18 2005/03/01 16:52:03 plastic Exp $
+# $Id: jlsync,v 1.19 2005/03/07 18:57:59 plastic Exp $
 
 =head1 NAME
 
@@ -372,9 +372,9 @@ foreach $client (keys %cph)
 
 foreach $client (keys %cph)
 {
-	print "masks are ".RED.BOLD.join(" ",@{$maskshash{$client}}) .RESET.".\n building image for $client in $stg/$client ... ";
 	&buildstage($client);
-	print "done.\n";
+
+	# need to fix on a per client basis.
 	print "excluded files are:\n" . ON_CYAN . "\n"
 		. join ("\n",@excludepatterns) . "\n" . RESET . "\n";
 
@@ -423,16 +423,21 @@ sub buildstage
 	$client = $_[0];
 	@masks = @{$maskshash{$client}}; # @masks is a global var
 
+	print "masks are ".RED.BOLD.join(" ",@{$maskshash{$client}}) .RESET.".\n";
+
 	print "buildstage: client: $client  masks: " . join(',',@masks) . "\n" if $verbose;
 
-	# link files to staging area
-	my $command;
+	print "deleting old image for $client in $stg/$client ... ";
 	system "/bin/rm -rf $stg/$client"; if ( $? !=0 ) {  die "could not /bin/rm -rf $stg/$client"; }
-	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
+	print "done.\n";
 
 	chdir $src;
 	print "pwd is now $src (repository area root)\n" if $verbose;
 
+	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
+	print "building new image for $client in $stg/$client ... ";
+
+	# link files to staging area
 	File::Find::find({ 
 			preprocess => \&filtercontrolfiles, 
 			wanted => \&hardlinkfiles, 
@@ -440,6 +445,8 @@ sub buildstage
 			no_chdir => 1
 				}, "." );
 	nospin();
+
+	print "done.\n";
 
 	s|^\.|| foreach @excludepatterns;
 	open(TMP,">$excludepatternfile");
@@ -459,63 +466,46 @@ sub filtercontrolfiles {
 	{
 		spin();
 	}	
+
 	foreach $mask (reverse @masks)
 	{
-		my @alist = grep  /\.$mask\.a~$/  , @newlist;
+		my @alist = grep  /\.[\w+,]*$mask[,\w+]*\.a~$/  , @newlist;
 		my $a;
 		foreach $a (@alist)
 		{
-			print "a is $a\n" if $verbose;
-			(my $basename = $a) =~ s/\.$mask\.a~$//;
+			print "a~ is $a\n" if $verbose;
+			(my $basename = $a) =~ s/\.[\w+,]*$mask[,\w+]*\.a~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w+[,\w+]*\.[ade]\~$/,@newlist;
 			push (@newlist,$a);
 		}
 
-		my @dlist = grep  /\.$mask\.d~$/  , @newlist;
+		my @dlist = grep  /\.[\w+,]*$mask[,\w+]*\.d~$/  , @newlist;
 		my $d;
 		foreach $d (@dlist)
 		{
-			print "d is $d\n" if $verbose;
-			(my $basename = $d) =~ s/\.$mask\.d~$//;
+			print "d~ is $d\n" if $verbose;
+			(my $basename = $d) =~ s/\.[\w+,]*$mask[,\w+]*\.d~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w+[,\w+]*\.[ade]\~$/,@newlist;
 		}
 
-		my @elist = grep  /\.$mask\.e~$/  , @newlist;
+		my @elist = grep  /\.[\w+,]*$mask[,\w+]*\.e~$/  , @newlist;
 		my $e;
 		foreach $e (@elist)
 		{
-			print "e is $e\n" if $verbose;
-			(my $basename = $e) =~ s/\.$mask\.e~$//;
+			print "e~ is $e\n" if $verbose;
+			(my $basename = $e) =~ s/\.[\w+,]*$mask[,\w+]*\.e~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w+[,\w+]*\.[ade]\~$/,@newlist;
 			push (@excludepatterns, $dir ."/". $basename);
 		}
 	}
 
-	# strip out any remaining control files for other masks.
-	my $a;
-	my @newnewlist;
-	foreach $a (@newlist)
-	{
-		if ( $a =~ /\.(\w[\w-]*)\.a\~$/ )
-		{
-			my $mask = $1;
-			push(@newnewlist, $a) if grep /^$mask$/, @masks;
-		}
-		elsif ( $a =~ /\.[ed]\~$/ )
-		{
-			# must be other masks.
-			next;
-		}
-		else
-		{
-			push(@newnewlist, $a);
-		}
-	}
+	# strip out any remaining control files for other previously non-matched masks.
+	@newlist = grep !/\.\w+[,\w+]*\.[ade]\~$/,@newlist;
 
-	@newlist = sort @newnewlist;
+	@newlist = sort @newlist;
 	print "newlist is now " . (join ",",@newlist) . "\n" if $verbose;
 	return @newlist;
 }
