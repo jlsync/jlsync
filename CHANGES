@@ -1,6 +1,6 @@
 
 #
-# $Id: CHANGES,v 1.1 2004/10/09 22:27:34 plastic Exp $
+# $Id: CHANGES,v 1.2 2004/10/10 18:44:47 plastic Exp $
 #
 
 version: 
@@ -8,6 +8,7 @@ version:
 - cleaner output, more garbage hidden behind --verbose
 - improved error checking for config file
 - improved colorization for --get file comparisions.
+- default mask for --get is now always client host mask
 
 version: 1.12 2004/06/22 17:02:43
 
