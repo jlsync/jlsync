@@ -1,27 +1,27 @@
 #!/usr/local/bin/perl -w
 
-# deploy - not yet useable
+# jlsync - not yet useable
 #
-# Jason Lee, deploy@jason-lee.net.au, March 2002
+# Jason Lee, jlsync@jason-lee.net.au, March 2002
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.30 2005/03/29 19:36:58 plastic Exp $
+# $Id: jlsync,v 1.31 2005/04/01 00:29:22 plastic Exp $
 
 =head1 NAME
 
-deploy - rsync wrapper to deploy files from a central repository to
+jlsync - rsync wrapper to deploy files from a central repository to
 client hosts
 
 =head1 SYNOPSIS
 
-    deploy [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout [clienthostname2:/path/to/pushout]
+    jlsync [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout [clienthostname2:/path/to/pushout]
 
-    deploy --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
+    jlsync --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
 
 =head1 DESCRIPTION
 
-deploy is a rsync wrapper that allows files and directories to be
+jlsync is a rsync wrapper that allows files and directories to be
 syncronised from a central repository to many client hosts. Files can
 be grouped into file templates that individual client hosts can
 "subscribe" to.  Deploy works well with ssh key authentication to avoid
@@ -51,17 +51,17 @@ run the following commands:
 
 First run
 
-	 deploy jav04:/usr/java  
+	 jlsync jav04:/usr/java  
 
 this will build the staging image and the do a pretend rsync to jav04
 with the --dry-run rsync option. Look closely at the output and verify
 the additions and deletions on the remote host are as expected. You
 will then be prompted with "would your like run rsync now for real?
 [yes/No]". Answer yes to run rsync again without the --dry-run rysnc
-option. Only if you're 100% sure that deploy is going add and delete
+option. Only if you're 100% sure that jlsync is going add and delete
 the correct files you can run with the --real option
 
-	deploy --real jav04:/usr/java
+	jlsync --real jav04:/usr/java
 
 when the --real option you are not prompted and rsync to the client
 does not use the --dry-run option. BE CAREFUL, incorrect usage or
@@ -83,7 +83,7 @@ deployed to other clients that subscribe to the WEBSERVERS template.
 
 =head2 The config file
 
-For each client host the deploy.config file lists any file templates
+For each client host the jlsync.config file lists any file templates
 that hosts subscribes to. A template is made up of files and
 control files in the repository that share same template/mask name.
 Using templates is a convient way of grouping files that should only be
@@ -95,7 +95,7 @@ each client also subscribes to a template that is the same as that
 client's hostname.
 
 Templates filesets are layered one upon another to build the 
-deploy image in the
+jlsync image in the
 staging area before the image is rsync'ed to the client. 
 The control files for templates are applied in reverse same order as they
 are listed in the control file, ie. right to left. When multiple control 
@@ -103,13 +103,13 @@ files exist with the same basename exist the most significate control
 file is used. The hostname control files are always the most significant
  and the DEFAULT control files are always the least significant.
 
-The following example deploy.config entry shows a host, jav04, entry
+The following example jlsync.config entry shows a host, jav04, entry
 that only contains the minimum of the DEFAULT template and it's own
 template.
 
 	DEFAULT	jav04
 
-The next example deploy.config entry shows a host, www05, who's final
+The next example jlsync.config entry shows a host, www05, who's final
 file image is made up of 3 additional file templates
 
 	DEFAULT WEBSERVERS prodservers london www05
@@ -159,7 +159,7 @@ file to be be ignored (left alone) by the rsync for all client hosts
 
 This next Exclude control file will cause the entire /var/mysql
 directory to be ignored for any client hosts that are listed with the
-"databaseservers" template in the deploy.config file.
+"databaseservers" template in the jlsync.config file.
 
 	/var/mysql.databaseservers.e~
 
@@ -183,7 +183,7 @@ of the template) use something like
 
 Multiple files from the same client can be deployed at the same time
 	
-	deploy jav04:/etc/passwd jav04:/etc/shadow
+	jlsync jav04:/etc/passwd jav04:/etc/shadow
 
 this style of usage is useful when base directory of the files is not
 fully syncronised with the repository. It's also quicker than two
@@ -252,7 +252,7 @@ use vars qw/*name *dir *prune $mask @excludepatterns @masks/;
 *prune  = *File::Find::prune;
 
 # config file
-my $config="/software/deploy.config";
+my $config="/jlsync/jlsync.config";
 
 # path to rsync version 2.6.0 
 my $rsync="/usr/local/bin/rsync";
@@ -261,11 +261,11 @@ my $rsync="/usr/local/bin/rsync";
 my $rsync_opts = "--rsync-path=/usr/local/bin/rsync --rsh=/usr/local/bin/ssh";
 
 # directories without trailing /
-my $deploydir = "/software";
-my $src = $deploydir . "/src";
-my $stg = $deploydir . "/stg2";
-my $dst = $deploydir . "/dst";
-my $backup_dir = $deploydir . "/bak";
+my $jlsyncdir = "/software";
+my $src = $jlsyncdir . "/src";
+my $stg = $jlsyncdir . "/stg2";
+my $dst = $jlsyncdir . "/dst";
+my $backup_dir = $jlsyncdir . "/bak";
 
 my $abletolinktosymlinks = 0 ; # linux = 1 , solaris = 0 ;
 
@@ -367,7 +367,7 @@ foreach $client (keys %cph)
 	my $lockfile = "$stg/${client}-lock";
 	if ( -f $lockfile )
 	{
-		print "deploy currently locked ( $lockfile ) by process id ";
+		print "jlsync currently locked ( $lockfile ) by process id ";
 		system "cat",$lockfile;
 		print "\n";
 		exit 1;
@@ -396,7 +396,7 @@ foreach $client (keys %cph)
 
 	@excludepatterns = @{$cph{$client}->{excludepatterns}} ;
 
-	$excludepatternfile = "/tmp/" . ".deploy-" . $client ."-". time ."-". $$;
+	$excludepatternfile = "/tmp/" . ".jlsync-" . $client ."-". time ."-". $$;
 
 	open(TMP,">$excludepatternfile") || die "could not open $excludepatternfile";
 	print TMP join ("\n",@excludepatterns) . "\n";
@@ -439,9 +439,9 @@ exit 0;
 
 sub usage
 {
-	print "deploy usage:\n";
-	print "deploy [--real] [--nocolor] [--verbose ] client:/path/to/pushout [more:/client/path/pairs]\n";
-	print "deploy --get [--mask=MASK] [--real] [--nocolor] [--verbose ] client:/path/to/pullback\n";
+	print "jlsync usage:\n";
+	print "jlsync [--real] [--nocolor] [--verbose ] client:/path/to/pushout [more:/client/path/pairs]\n";
+	print "jlsync --get [--mask=MASK] [--real] [--nocolor] [--verbose ] client:/path/to/pullback\n";
 	exit 1;
 }
 
