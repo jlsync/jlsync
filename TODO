@@ -6,4 +6,7 @@ multiple files/directories from the command line
 bug: exclude file in control file subdirectory...
    /usr/local/bb/bbc1.9e-btf.SOLX86.a~/*
 
+feature: mutliple MASKS in one exension, aaaaa.WEB,DATABASE.a~
+
+
 
