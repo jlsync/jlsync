@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.15 2004/10/10 22:33:52 plastic Exp $
+# $Id: jlsync,v 1.16 2004/10/11 17:53:06 plastic Exp $
 
 =head1 NAME
 
@@ -694,14 +694,14 @@ sub get
 
 	if ( $real )
 	{
-		print "updating " . BLUE . $target . RESET . "... ";
+		print ON_GREEN . "updating " . BLUE . $target . RESET . ON_GREEN . "... ";
 		print "rmtree($target)\n" if ($verbose);
 		rmtree($target); 
 		print "mkpath" . dirname($target) . "\n" if ($verbose);
 		mkpath dirname($target), 0, 0755;
 		print "rename($stggettmppath, $target)\n" if ($verbose);
 		rename($stggettmppath, $target) || die "unable to rename $stggettmp to $target";
-		print "done.\n";
+		print "done." . RESET . "\n";
 	}
 
 
