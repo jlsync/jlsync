@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.17 2004/11/17 21:49:17 plastic Exp $
+# $Id: jlsync,v 1.18 2005/03/01 16:52:03 plastic Exp $
 
 =head1 NAME
 
@@ -15,7 +15,7 @@ client hosts
 
 =head1 SYNOPSIS
 
-    deploy [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout
+    deploy [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout [clienthostname2:/path/to/pushout]
 
     deploy --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
 
@@ -43,7 +43,7 @@ option with caution!
 --mask=template_name  when pulling files from a remote client put them into the repostitory with and add mask of template_name.    
 
 
-=head1 USAGE
+=head1 BASIC USAGE
 
 To distribute /usr/java from the repository to a host called jav04
 run the following commands:
@@ -132,7 +132,9 @@ file image to be deloyed to the client.
 =head3 the Delete .templatename.d~ controlfile
 
 If file with the Delete control file suffix exists in the 
-repository then any corresponding file or directory with the same basename will not be added the file image the the staging area for that client. 
+repository then any corresponding file or directory with the same
+basename will not be added the file image the the staging area for that
+client.
 
 Rsync will delete files on remote hosts that aren't found in the local
 file image (that is unless they have also been excluded from the rsync
@@ -174,6 +176,37 @@ To exlude all files in a directory (but make sure the directory is part
 of the template) use something like
 
 	/var/mysql/*.databaseservers.e~
+
+=head1 ADVANCED USAGE
+
+Multiple files from the same client can be deployed at the same time
+	
+	deploy jav04:/etc/passwd jav04:/etc/shadow
+
+this style of usage is useful when base directory of the files is not
+fully syncronised with the repository. It's also quicker than two
+individual invocations of jlsync as the staging image is only built
+once.
+
+Multiple clients can be deployed in a single command
+
+	jlsync jav03:/opt/apache jav04:/opt/apache
+
+with this sytle of usage the staging image for each client will be
+built first before files are deployed.
+
+=head2 Advanced Control Files
+
+A control file can belong to multiple masks at once by separating the
+masks with a comma "," e.g.
+
+	/opt/apache.www3,www4.a~
+and
+	/etc/motd.INTERNAL,EXTERNAL,DMZ.e~
+
+
+
+
 
 =head1 TODO
 
@@ -233,8 +266,16 @@ my @controlfiles = (); # array of control file hashes.
 
 $| = 1; # turn on autoflush
 
+my $spinpos;
+my $spinning;
+my $spinlen;
+
 umask 0 ; # needed by subsequent mkdirs
 
+my %cph ;  # Client Path Hash
+
+my $client = '';
+my $path = '';
 my $verbose = '';  
 my $real = '';  
 my $get = '';  
@@ -246,15 +287,34 @@ GetOptions( "real" =>\$real , 		# --real
 	    "nocolor" =>\$nocolor ,     # --nocolor
 	    "nocolour" =>\$nocolor ,    # --nocolor
 	    "mask=s" =>\$getmask ,	# --mask
-		);
-&usage unless (defined $ARGV[0] && $ARGV[0] =~ m|\w[\w-]*:/|);
+	);
+
+if ( $get )
+{
+	&usage unless ( ( scalar (@ARGV) == 1) && $ARGV[0] =~ m|\w[\w-]*:/|);
+}
+else
+{
+	
+	&usage unless (defined $ARGV[0]);
+	foreach my $arg (@ARGV)
+	{
+		&usage unless ($arg =~ m|\w[\w-]*:/|);
+	}
+}
+
+foreach my $arg (@ARGV)
+{
+	$arg =~ m|(.+):(.+)|;
+	my $client = $1;
+	my $path = $2;
+	push(@{$cph{$client}},$path);
+}
+
 
 my $dryrun =  $real ? "" : "--dry-run";
 $ENV{'ANSI_COLORS_DISABLED'} = 'nocolor' if ( $nocolor ) ;
 
-my ( $client, $path ) = split (":",$ARGV[0]);
-$path = "/" unless ($path); 
-$path =~ s|^|/| unless ( $path =~ m|^/| ); 
 my $excludepatternfile = "/tmp/" . ".deploy-" . $client ."-". time ."-". $$;
 
 my %maskshash;
@@ -280,26 +340,29 @@ while(<MASK>)
 }
 close MASK;
 
-if (defined $maskshash{$client}) 
+foreach $client (keys %cph)
 {
-	@masks = @{$maskshash{$client}};
-}
-else
-{
-	print "$client not found in file $config. exiting.\n";
-	exit 1;
+	unless (defined $maskshash{$client}) 
+	{
+		print "$client not found in file $config. exiting.\n";
+		exit 1;
+	}
 }
 
-my $lockfile = "$stg/${client}-lock";
-if ( -f $lockfile )
+foreach $client (keys %cph)
 {
-	print "deploy currently locked ( $lockfile ) by process id ";
-	system "cat",$lockfile;
-	print "\n";
-	exit 1;
+	my $lockfile = "$stg/${client}-lock";
+	if ( -f $lockfile )
+	{
+		print "deploy currently locked ( $lockfile ) by process id ";
+		system "cat",$lockfile;
+		print "\n";
+		exit 1;
+	}
 }
-else
+foreach $client (keys %cph)
 {
+	my $lockfile = "$stg/${client}-lock";
 	open(LOCK,">$lockfile") || die "could not create lockfile: $lockfile";
 	print LOCK $$;
 	close LOCK;
@@ -307,12 +370,15 @@ else
 
 
 
+foreach $client (keys %cph)
+{
+	print "masks are ".RED.BOLD.join(" ",@{$maskshash{$client}}) .RESET.".\n building image for $client in $stg/$client ... ";
+	&buildstage($client);
+	print "done.\n";
+	print "excluded files are:\n" . ON_CYAN . "\n"
+		. join ("\n",@excludepatterns) . "\n" . RESET . "\n";
 
-print "masks are ".RED.BOLD.join(" ",@masks) .RESET.". building image... ";
-&buildstage($client);
-print "done.\n";
-print "excluded files are:" . ON_CYAN . "\n"
-	. join ("\n",@excludepatterns) . "\n" . RESET . "\n";
+}
 
 if ( $get )
 {
@@ -320,28 +386,46 @@ if ( $get )
 }
 else
 {
-	&deploy();
+	foreach $client (keys %cph)
+	{
+		foreach $path ( @{$cph{$client}} )
+		{
+			print "main: client: $client path: $path\n" if $verbose;
+			if ( 1 )
+			{
+				&deploy($client, $path);
+			}
+		}
+	}
 }
 
 
 unlink $excludepatternfile;
-unlink $lockfile;
+
+foreach $client (keys %cph)
+{
+	my $lockfile = "$stg/${client}-lock";
+	unlink $lockfile;
+}
+
 exit 0;
 
 sub usage
 {
 	print "deploy usage:\n";
-	print "deploy [--real] [--nocolor] [--verbose ] client:/path/to/pushout\n";
+	print "deploy [--real] [--nocolor] [--verbose ] client:/path/to/pushout [more:/client/path/pairs]\n";
 	print "deploy --get [--mask=MASK] [--real] [--nocolor] [--verbose ] client:/path/to/pullback\n";
 	exit 1;
 }
 
 sub buildstage
 {
-	my $client = $_[0];
+	$client = $_[0];
+	@masks = @{$maskshash{$client}}; # @masks is a global var
+
+	print "buildstage: client: $client  masks: " . join(',',@masks) . "\n" if $verbose;
 
 	# link files to staging area
-
 	my $command;
 	system "/bin/rm -rf $stg/$client"; if ( $? !=0 ) {  die "could not /bin/rm -rf $stg/$client"; }
 	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
@@ -355,6 +439,7 @@ sub buildstage
 			postprocess => \&setdirdate, 
 			no_chdir => 1
 				}, "." );
+	nospin();
 
 	s|^\.|| foreach @excludepatterns;
 	open(TMP,">$excludepatternfile");
@@ -365,8 +450,15 @@ sub buildstage
 sub filtercontrolfiles {
 	my @filelist = @_;
 	my @newlist = sort @filelist ;
-	print "predir is $dir\n" if $verbose;
-	print "newlist is " . (join ",",@newlist) . "\n" if $verbose;
+	if ($verbose)
+	{
+		print "predir is $dir\n" ;
+		print "newlist is " . (join ",",@newlist) . "\n" ;
+	}
+	else
+	{
+		spin();
+	}	
 	foreach $mask (reverse @masks)
 	{
 		my @alist = grep  /\.$mask\.a~$/  , @newlist;
@@ -485,31 +577,40 @@ sub getcontrolfiles {
 	}
 }
 
+#
+#
 sub deploy
 {
+	my $client = $_[0];
+	my $path = $_[1];
+
+	my $yes = 0;
+	print "deploy: client: $client  path: $path\n" if $verbose;
 	chdir "$stg/$client";
 	print "pwd is now $stg/$client (staging area root)\n" if $verbose;
-	unless (  $real )
+	unless ( $real )
 	{
-		&deploy_rsync("--dry-run");
+		&deploy_rsync("--dry-run",$client,$path);
 
 		# ask question.
 		print "would your like run rsync now for real? [yes/No] ";
 		my $answer = <STDIN>;
 		if ( $answer =~ /^y/i )
 		{
-			$real = 1;	
+			$yes = 1;	
 		}
 	}
-	if ( $real )
+	if ( $real || $yes )
 	{
-		&deploy_rsync("");
+		&deploy_rsync("",$client,$path);
 	}
 }
 
 sub deploy_rsync
 {
 	my $dryrun = $_[0];
+	my $client = $_[1];
+	my $path = $_[2];
 	my $command = "$rsync $dryrun --verbose --compress --archive --delete --recursive --links --relative --rsh=/usr/local/bin/ssh --rsync-path=/usr/local/bin/rsync --exclude-from=$excludepatternfile  .$path $client:/";
 	print ($dryrun ? "running dry-run first...\n" : "running rsync for real...\n");
 	print ($dryrun ? ON_YELLOW BOLD : ON_GREEN BOLD);
@@ -708,25 +809,29 @@ sub get
 	}
 
 
-
-#	# now check for e~ or d~ obscructions # too hard?
-#	my $base = $src . $get ;
-#	if ( $getmask ne "DEFAULT" )
-#	{
-#		$base .=  "." . $getmask ;
-#	}
-#		
-#	my $ex;
-#	foreach  $ex ( ".e~", ".d~" )
-#	{
-#		my $baseex = $base . $ex;
-#		if ( -e $baseex )
-#		{
-#			print "deleteing  $baseex\n";
-#			rmtree ($baseex);
-#		}
-#	}
-
-
 }
+
+
+# spin code from http://dreamscape.org/code/spin - slf@dreamscape.org - steven fountain
+
+sub spin
+{
+	$|=1; # should allways be used..
+	#my @spinchars = qw(. o O o);
+	my @spinchars = qw(- / | \\);
+	$spinlen = @spinchars; # count chars to spin
+	$spinpos = 0 unless defined $spinpos; # initialize spin position
+	print "\b" if $spinning; # backspace over the last character
+	$spinning = 1 unless defined $spinning; # is this the first run?
+	print "$spinchars[$spinpos]"; # print the spin character
+	$spinpos++; # increment the spin position
+	$spinpos = 0 if ($spinpos >= $spinlen); # start over if no more chars
+}
+
+sub nospin
+{
+	undef $spinning;
+	$spinpos = 0;
+}
+
 
