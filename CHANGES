@@ -1,0 +1,14 @@
+
+#
+# $Id: CHANGES,v 1.1 2004/10/09 22:27:34 plastic Exp $
+#
+
+version: 
+- now using super cool Term::ANSIColor
+- cleaner output, more garbage hidden behind --verbose
+- improved error checking for config file
+- improved colorization for --get file comparisions.
+
+version: 1.12 2004/06/22 17:02:43
+
+
