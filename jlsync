@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.13 2004/10/09 22:29:28 plastic Exp $
+# $Id: jlsync,v 1.14 2004/10/10 18:43:26 plastic Exp $
 
 =head1 NAME
 
@@ -58,25 +58,23 @@ the --dry-run rysnc option. Only if you're 100% sure that deploy is going add an
 
 	deploy --real jav04:/usr/java
 
-when the --real option you are not prompted and rsync to the 
-client does not use the
---dry-run option. BE CAREFUL, incorrect usage or incorrect
-configuration in the repository could easily result in the permanent
-deletion of important files on the client.
+when the --real option you are not prompted and rsync to the client
+does not use the --dry-run option. BE CAREFUL, incorrect usage or
+incorrect configuration in the repository could easily result in the
+permanent deletion of important files on the client.
 
 To quickly gather files from a remote host back into the repostory the
 --get option can be used. By default gathered files will be added to
-the DEFAULT template however if the files already exist in the
-repository the files will be added the host template. A specific
-template can be named with the --mask option.  For example to get a
-freshly installed httpd binary back from client host web01 into the
-repostory for the file template "webservers" run
+the client host template.  A specific template can be named with the
+--mask option.  For example to get a freshly installed httpd binary
+back from client host web01 into the repostory for the file template
+"WEBSERVERS" run
 
-	deloy --get --mask=webservers web01:/usr/local/apache/bin/httpd
+	deloy --get --mask=WEBSERVERS web01:/usr/local/apache/bin/httpd
 
-once the file is in the repository it can be deployed to other clients
-that subscribe to the webservers template. This will result in 
-usr/local/apache/bin/httpd.webservers.a~ being added to the repostitory.
+This will result in usr/local/apache/bin/httpd.WEBSERVERS.a~ being
+added to the repostitory.  Once the file is in the repository it can be
+deployed to other clients that subscribe to the WEBSERVERS template.
 
 =head2 The config file
 
@@ -107,9 +105,9 @@ template.
 	DEFAULT	jav04
 
 The next example deploy.config entry shows a host, www05, who's final
-file image is made up of 2 additional file templates
+file image is made up of 3 additional file templates
 
-	DEFAULT webservers prodservers www05
+	DEFAULT WEBSERVERS prodservers london www05
 
 =head2 The respository 
 
@@ -564,20 +562,10 @@ sub get
 	my $stggettmp = $stg . "/" . $client . "-get";
 	my $stggettmppath = $stggettmp  . $path ;
 
-        # if no getmask is supplied then DEFAULT is used if the files
-        # don't already exist in the repostory with DEFAULT mask, or if
-        # they do exist then the client's own mask is used.
-
+        # if no getmask is supplied then $client is used.
 	if ( ! $getmask )
 	{
-		if ( -e $srcget )
-		{
-			$getmask = $client;
-		}
-		else
-		{
-			$getmask = "DEFAULT";
-		}
+		$getmask = $client;
 	}
 	
 	if ( $getmask eq "DEFAULT" )
@@ -586,6 +574,10 @@ sub get
 	}
 	else
 	{
+		if ( ! grep(/^\Q$getmask\E$/, @{$maskshash{$client}}) )
+		{
+			print BOLD.YELLOW . "WARNING client $client is currently not subscribed to mask $getmask\n". RESET;
+		}
 		$target = $src . $path . "." . $getmask . ".a\~";
 	}
 
@@ -710,35 +702,4 @@ sub get
 
 
 }
-
-# color codes
-sub ccode {
-
-	my %attribute = (
-	  'default'    => "\033[0m",
-	  'black'      => "\033[30m",
-	  'red'        => "\033[31m",
-	  'green'      => "\033[32m",
-	  'yellow'     => "\033[33m",
-	  'blue'       => "\033[34m",
-	  'magenta'    => "\033[35m",
-	  'cyan'       => "\033[36m",
-	  'white'      => "\033[37m",
-	  'normal'     => "\033[00m",
-	  'bright'     => "\033[01m",
-	  'underlined' => "\033[04m",
-	  'blinking'   => "\033[05m",
-	  'background' => "\033[07m",
-	  'beep'       => "\007"
-	);
-
-	my ($modifier) = @_;
-	my @attribs = split ( / /, $modifier );
-	my $code = "";
-	for my $attrib(@attribs) {
-		$code .= $attribute{$attrib} if defined $attribute{$attrib};
-	}
-	return $code;
-}
-
 
