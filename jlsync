@@ -1,110 +1,224 @@
-#!/usr/bin/perl
-
+#!/usr/bin/perl -w
 
 use strict;
 use File::Find ();
+use File::Path;
+use File::Basename;
+use Getopt::Long;
+
 
 # for the convenience of &wanted calls, including -eval statements:
-use vars qw/*name *dir *prune/;
+use vars qw/*name *dir *prune $mask @excludepatterns @masks/;
 *name   = *File::Find::name;
 *dir    = *File::Find::dir;
 *prune  = *File::Find::prune;
 
-#
-my $src = "/tmp/spit/";
-my $stg = "/tmp/stage/";
-my $dst = "/tmp/destination/";
+# directories without trailing /
+my $deploydir = "/var/tmp/deploy";
+my $src = $deploydir . "/src";
+my $stg = $deploydir . "/stg";
+my $dst = $deploydir . "/dst";
 
-#
+my $backup_dir = "/var/tmp/deploy/backup_dir";
 
-my $clmask = $ARGV[0];
+$| = 1; # turn on autoflush
+
+my $real = '';  
+my $get = '';  
+my $getmask = '';  
+GetOptions( "real" =>\$real , 	# --real
+	    "get" =>\$get ,     # --get
+	    "mask=s" =>\$getmask ,# --mask
+		);
+
+my $dryrun =  $real ? "" : "--dry-run";
+
+my $excludepatternfile = "/tmp/" . "spit" . time . $$;
+my ( $client, $path ) = split (":",$ARGV[0]);
+$path = "/" unless ($path); 
+$path =~ s|^|/| unless ( $path =~ m|^/| ); 
+
 my @masks;
-# check for any mask dependices
-open(MASK,"deploy.config");
-while(<MASK>)
+
+&buildstage($client);
+
+if ( $get )
 {
-	s/\s+$//;
-	my @tmasks = split (/\s+/);
-	if ($tmasks[0] == 'DEFAULT' && $tmasks[$#tmasks] eq $clmask )
+	&get()
+}
+else
+{
+	&deploy();
+}
+
+
+#unlink $excludepatternfile;
+exit 0;
+
+sub buildstage
+{
+	my $client = $_[0];
+	# check for any mask dependices
+	open(MASK,"deploy.config");
+	while(<MASK>)
 	{
-		@masks = @tmasks[1..($#tmasks -1 )];
-		last;
+		s/\s+$//;
+		my @tmasks = split (/\s+/);
+		if ($tmasks[0] eq 'DEFAULT' && $tmasks[$#tmasks] eq $client )
+		{
+			@masks = @tmasks[0..($#tmasks -1 )];
+			last;
+		}
 	}
+	close MASK;
+	push @masks,$client;
+
+	print "masks are " . join(" ",@masks) . "\n";
+
+	@excludepatterns = ( "*.~" , "*.d~", "*.i~" );
+
+	# first copy files to staging area
+	my $command;
+	$command = "rsync --compress --archive --delete --recursive --links --rsh=ssh  --relative $src$path $stg/";
+	print "running $command\n"; 
+	system $command;
+
+	# Traverse desired filesystem (loop by mask or function first?)
+	#my $mask;
+	foreach $mask (@masks)
+	{
+		chdir $stg; # keep it relative
+		File::Find::find({wanted => \&delete, no_chdir => 1}, "." );
+		File::Find::find({wanted => \&add, no_chdir => 1}, "." );
+		File::Find::find({wanted => \&ignore, no_chdir => 1}, "." );
+	}
+
+
+	print "ignored files are:\n" . join ("\n",@excludepatterns) . "\n";
+	open(TMP,">$excludepatternfile");
+	print TMP join ("\n",@excludepatterns) . "\n";
+	close TMP;
 }
-close MASK;
-push @masks,$clmask;
 
-print "masks are " . join(" ",@masks) . "\n";
-
-
-
-my @ignorefiles;
-
-# first copy files to staging area
-system "rsync --progress --verbose --compress --archive --rsh=ssh --delete $src $stg";
-
-
-# Traverse desired filesystem (loop by mask or function first?)
-
-my $mask;
-foreach $mask (@masks)
+sub deploy
 {
-	chdir $src; # keep it relative
-	File::Find::find({wanted => \&delete}, "." );
-	File::Find::find({wanted => \&rename}, "." );
-	File::Find::find({wanted => \&ignore}, "." );
+	# now copy files from stage to destination
+	my $command = "rsync $dryrun --verbose --compress --archive --delete --recursive --links --rsh=ssh --exclude-from=$excludepatternfile  $stg$path $client:$path";
+	print "running $command\n";
+	system $command;
 }
-
-my $tmpfilename = "/tmp/" . "spit" . time . $$;
-print "ignore files are:\n" . join ("\n",@ignorefiles) . "\n";
-open(TMP,">$tmpfilename");
-print TMP join ("\n",@ignorefiles) . "\n";
-close TMP;
-
-# now copy files from stage to destination
-system "rsync --progress --verbose --compress --archive --rsh=ssh --exclude-from=$tmpfilename --delete $stg $dst";
-
-
-#unlink $tmpfilename;
-
-exit;
-
 
 sub delete {
-	if ( /^(.*)\.$mask\.d~\z/s )
-	{
-		my $target = $1;
-		my $targetpathname = $dir . "/" .  $target;
-		print("$targetpathname\n");
-		print "removing $stg$targetpathname\n";
-		system 'rm','-rf',$stg  . $targetpathname ; 
-		#(unlink($_) || warn "$name: $!\n") &&
-		print("$name\n");
-	}
+		if ( $name =~ /^(.*)\.${mask}\.d~\z/s )
+		{
+			my $target = $1;
+			print "removing $target";
+			rmtree($target); 
+		}
 }
 
-sub rename {
-	if ( /^(.*)\.$mask\.~\z/s )
+sub add {
+	if ( $name =~ /^(.*)\.${mask}\.~\z/s )
 	{
 		my $target = $1;
-		my $targetpathname = $dir . "/" .  $target;
-		print("$targetpathname\n");
-		print "removing $stg$targetpathname\n";
-		system 'rm','-rf',$stg  . $targetpathname ; 
-		print "renaming  $stg$name to  $stg$targetpathname\n";
-		rename $stg  . $name, $stg  . $targetpathname;
-		print("$name\n");
+		if ( -e $target )
+		{
+			print "removing $target\n";
+			rmtree( $target ); 
+		}
+		print "renaming $name to $target\n";
+		rename  $name , $target;
 	}
 }
 
 sub ignore {
-	if ( /^(.*)\.$mask\.i~\z/s )
+	if (  $name =~ /^(.*)\.${mask}\.i~\z/s )
 	{
 		my $target = $1;
-		my $targetpathname = $dir . "/" .  $target;
-		print("$targetpathname\n");
-		push (@ignorefiles, $targetpathname);
+		(my $targetpathname =  $target ) =~ s|^\.|| ;
+		print("excluding $targetpathname\n");
+		push (@excludepatterns, $targetpathname);
 	}
 }
 
+
+sub get
+{
+	my $get = $path;
+	my $target;
+	my $stgget = $stg . $get;
+	my $srcget = $src . $get;
+
+        # if no getmask is supplied then DEFAULT is used if the files
+        # don't already exist in the repostor with DEFAULT mask, or if
+        # they do exist then the client's own mask is used.
+	if ( ! $getmask )
+	{
+		if ( -e $srcget )
+		{
+			$getmask = $client;
+		}
+		else
+		{
+			$getmask = "DEFAULT";
+		}
+	}
+	
+	if ( $getmask eq "DEFAULT" )
+	{
+		$target = $src . $get;
+	}
+	else
+	{
+		$target = $src . $get . "." . $getmask . ".\~";
+	}
+
+	# now copy files from destination back into staging 
+
+	print "rsync --compress --archive --rsh=ssh --exclude-from=$excludepatternfile --delete   --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$get $stg \n";
+	open(RSYNC, "rsync --compress --archive --rsh=ssh --exclude-from=$excludepatternfile --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$get $stg |") ;
+	my @changes = (<RSYNC>);
+	close RSYNC;
+	
+	print "changes are:\n",@changes,"\n";
+
+
+	# maybe need to add check if a directory is being replaced with a file.
+
+	# rsync up...
+
+	my $s = "$stg$get";
+	if ( -d  $s )
+	{
+		$s =~ s|$|/| ;
+		system "mkdir","-p",$target;
+	}
+	else
+	{
+		system "mkdir","-p",basename($target);
+	}
+
+	my $command;
+	$command = "rsync --compress --archive --delete --exclude-from=$excludepatternfile --recursive --links --rsh=ssh  $s $target";
+	print "running $command\n"; 
+	system $command;
+
+	# now check for i~ or d~ obscructions
+	my $base = $src . $get ;
+	if ( $getmask ne "DEFAULT" )
+	{
+		$base .=  "." . $getmask ;
+	}
+		
+	my $ex;
+	foreach  $ex ( ".i~", ".d~" )
+	{
+		my $baseex = $base . $ex;
+		if ( -e $baseex )
+		{
+			print "deleteing  $baseex\n";
+			rmtree ($baseex);
+		}
+	}
+}
 
