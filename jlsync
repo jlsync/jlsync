@@ -1,0 +1,110 @@
+#!/usr/bin/perl
+
+
+use strict;
+use File::Find ();
+
+# for the convenience of &wanted calls, including -eval statements:
+use vars qw/*name *dir *prune/;
+*name   = *File::Find::name;
+*dir    = *File::Find::dir;
+*prune  = *File::Find::prune;
+
+#
+my $src = "/tmp/spit/";
+my $stg = "/tmp/stage/";
+my $dst = "/tmp/destination/";
+
+#
+
+my $clmask = $ARGV[0];
+my @masks;
+# check for any mask dependices
+open(MASK,"deploy.config");
+while(<MASK>)
+{
+	s/\s+$//;
+	my @tmasks = split (/\s+/);
+	if ($tmasks[0] == 'DEFAULT' && $tmasks[$#tmasks] eq $clmask )
+	{
+		@masks = @tmasks[1..($#tmasks -1 )];
+		last;
+	}
+}
+close MASK;
+push @masks,$clmask;
+
+print "masks are " . join(" ",@masks) . "\n";
+
+
+
+my @ignorefiles;
+
+# first copy files to staging area
+system "rsync --progress --verbose --compress --archive --rsh=ssh --delete $src $stg";
+
+
+# Traverse desired filesystem (loop by mask or function first?)
+
+my $mask;
+foreach $mask (@masks)
+{
+	chdir $src; # keep it relative
+	File::Find::find({wanted => \&delete}, "." );
+	File::Find::find({wanted => \&rename}, "." );
+	File::Find::find({wanted => \&ignore}, "." );
+}
+
+my $tmpfilename = "/tmp/" . "spit" . time . $$;
+print "ignore files are:\n" . join ("\n",@ignorefiles) . "\n";
+open(TMP,">$tmpfilename");
+print TMP join ("\n",@ignorefiles) . "\n";
+close TMP;
+
+# now copy files from stage to destination
+system "rsync --progress --verbose --compress --archive --rsh=ssh --exclude-from=$tmpfilename --delete $stg $dst";
+
+
+#unlink $tmpfilename;
+
+exit;
+
+
+sub delete {
+	if ( /^(.*)\.$mask\.d~\z/s )
+	{
+		my $target = $1;
+		my $targetpathname = $dir . "/" .  $target;
+		print("$targetpathname\n");
+		print "removing $stg$targetpathname\n";
+		system 'rm','-rf',$stg  . $targetpathname ; 
+		#(unlink($_) || warn "$name: $!\n") &&
+		print("$name\n");
+	}
+}
+
+sub rename {
+	if ( /^(.*)\.$mask\.~\z/s )
+	{
+		my $target = $1;
+		my $targetpathname = $dir . "/" .  $target;
+		print("$targetpathname\n");
+		print "removing $stg$targetpathname\n";
+		system 'rm','-rf',$stg  . $targetpathname ; 
+		print "renaming  $stg$name to  $stg$targetpathname\n";
+		rename $stg  . $name, $stg  . $targetpathname;
+		print("$name\n");
+	}
+}
+
+sub ignore {
+	if ( /^(.*)\.$mask\.i~\z/s )
+	{
+		my $target = $1;
+		my $targetpathname = $dir . "/" .  $target;
+		print("$targetpathname\n");
+		push (@ignorefiles, $targetpathname);
+	}
+}
+
+
