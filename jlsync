@@ -4,7 +4,7 @@
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $Id: jlsync,v 1.5 2004/05/18 19:02:17 plastic Exp $
+# $Id: jlsync,v 1.6 2004/05/21 14:42:20 plastic Exp $
 
 =head1 NAME
 
@@ -160,11 +160,13 @@ of the template) use something like
 
 =head1 TODO
 
-pre and post exec command control files?
-log files?
-friendly remote diff/cmp ?
-pager
-use File::Same
+	pre and post exec command control files?
+	log files?
+	friendly remote diff/cmp ?
+	pager
+	use File::Same
+	use --update ?
+	use --backup ?
 
 
 =head1 SEE ALSO
@@ -183,7 +185,7 @@ use strict;
 use Cwd;
 use File::Find ();	  	# recent version required.
 use File::Path;
-use File::stat;
+# use File::stat;		# TODO: maybe use this later.
 use File::Basename;
 use Getopt::Long;
 
@@ -210,6 +212,8 @@ my $backup_dir = $deploydir . "/bak";
 my @controlfiles = (); # array of control file hashes.
 
 $| = 1; # turn on autoflush
+
+umask 0 ; # needed by subsequent mkdirs
 
 my $verbose = '';  
 my $real = '';  
@@ -392,7 +396,6 @@ sub hardlinkfiles {
 		$tbasename = $1;
 	}
 
-	# TODO: fix File::stat conflict
 	lstat $name ; # need lstat not stat to correctly identify symlinks
 
 	if ( -f _ )
@@ -403,7 +406,10 @@ sub hardlinkfiles {
 	elsif ( -d _ ) # -d on symlink to a dir will succeed on linux/ext2fs
 	{
 		print "$name is a dir\n" if $verbose;
-		mkdir "$stg/$client/$tname"|| die "unable to mkdir $stg/$client/$tname";
+		my ( $mode, $uid, $gid ) = (stat(_))[2,4,5];
+		$mode = $mode & 07777; # mask off file type
+		mkdir "$stg/$client/$tname", $mode || die "unable to mkdir $stg/$client/$tname";
+		chown $uid, $gid, "$stg/$client/$tname";
 	}
 	elsif ( -l _ )
 	{
@@ -424,7 +430,7 @@ sub setdirdate {
 		$tbasedir = $1;
 		rename "$stg/$client/$tdir","$stg/$client/$tbasedir";
 	}
-	utime(time, stat($dir)->mtime, "$stg/$client/$tbasedir");
+	utime(time, (stat($dir))[9], "$stg/$client/$tbasedir");
 }
 
 sub getcontrolfiles {
@@ -567,10 +573,10 @@ sub get
 		my $same = 'no';
 		if ( -e $stgget) 
 		{
-			print " stat($stgget)->ino is " . stat($stgget)->ino . "\n";
-			print " stat($target)->ino is " . stat($target)->ino . "\n";
-			$same = 'yes' if ( stat($stgget)->ino 
-						eq stat($target)->ino );
+			print "$stgget inode is " . (stat($stgget))[1] . "\n";
+			print "$target inode is " . (stat($target))[1] . "\n";
+			$same = 'yes' if ( (stat($stgget))[1]
+						eq (stat($target))[1] );
 		}
 		if ( $same eq 'no' )
 		{
