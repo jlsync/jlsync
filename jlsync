@@ -4,7 +4,7 @@
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $id$
+# $Id: jlsync,v 1.4 2002/03/18 02:37:43 plastic Exp $
 
 use strict;
 use File::Find ();
