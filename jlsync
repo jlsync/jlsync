@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.20 2005/03/07 19:08:32 plastic Exp $
+# $Id: jlsync,v 1.21 2005/03/14 18:42:43 plastic Exp $
 
 =head1 NAME
 
@@ -40,7 +40,8 @@ default behaviour which is to push out files form the repository).
 --real      do not prompt for confirmation of actions. Use this 
 option with caution!
 
---mask=template_name  when pulling files from a remote client put them into the repostitory with and add mask of template_name.    
+--mask=template_name  when pulling files from a remote client put them
+into the repostitory with and add mask of template_name.
 
 
 =head1 BASIC USAGE
@@ -54,10 +55,11 @@ First run
 
 this will build the staging image and the do a pretend rsync to jav04
 with the --dry-run rsync option. Look closely at the output and verify
-the additions and deletions on the remote host are as expected. You 
-will then be prompted with "would your like run rsync now for 
-real? [yes/No]". Answer yes to run rsync again without 
-the --dry-run rysnc option. Only if you're 100% sure that deploy is going add and delete the correct files you can run with the --real option
+the additions and deletions on the remote host are as expected. You
+will then be prompted with "would your like run rsync now for real?
+[yes/No]". Answer yes to run rsync again without the --dry-run rysnc
+option. Only if you're 100% sure that deploy is going add and delete
+the correct files you can run with the --real option
 
 	deploy --real jav04:/usr/java
 
@@ -469,43 +471,70 @@ sub filtercontrolfiles {
 
 	foreach $mask (reverse @masks)
 	{
-		my @alist = grep  /\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.a~$/  , @newlist;
+		my @alist = grep  /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.a~$/  , @newlist;
 		my $a;
 		foreach $a (@alist)
 		{
 			print "a~ is $a\n" if $verbose;
-			(my $basename = $a) =~ s/\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.a~$//;
+			(my $basename = $a) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.a~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*[,\w[\w-]*]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/,@newlist;
 			push (@newlist,$a);
 		}
 
-		my @dlist = grep  /\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.d~$/  , @newlist;
+		my @dlist = grep  /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.d~$/  , @newlist;
 		my $d;
 		foreach $d (@dlist)
 		{
 			print "d~ is $d\n" if $verbose;
-			(my $basename = $d) =~ s/\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.d~$//;
+			(my $basename = $d) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.d~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*[,\w[\w-]*]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/,@newlist;
 		}
 
-		my @elist = grep  /\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.e~$/  , @newlist;
+		my @elist = grep  /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.e~$/  , @newlist;
 		my $e;
 		foreach $e (@elist)
 		{
 			print "e~ is $e\n" if $verbose;
-			(my $basename = $e) =~ s/\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.e~$//;
+			(my $basename = $e) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.e~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*[,\w[\w-]*]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/,@newlist;
 			push (@excludepatterns, $dir ."/". $basename);
 		}
 	}
 
-	# strip out any remaining control files for other previously non-matched masks.
-	@newlist = grep !/\.\w[\w-]*[,\w[\w-]*]*\.[ade]\~$/,@newlist;
+        # strip out any remaining control files for other non-matched while preserving .a~ files.
+        my $f;
+        my @newnewlist = ();
+        foreach $f (@newlist)
+        {
+                if ( $f =~ /\.(\w[\w\-\,]*)\.a\~$/ )        # need to fix this to properly identifiy .MASK1,MASK2,MASK3.a~ and $1 $2 $3 etc.
+                {
+                        my @ms = split(",",$1);
+			foreach my $m (@ms)
+			{
+				if ( grep /^$m$/, @masks )
+				{
+                        		push(@newnewlist, $f);
+					last;
+				}
+			}
+                }
+                elsif ( $f =~ /\.[ed]\~$/ )
+                {
+                        # must be other masks.
+                        next;
+                }
+                else
+                {
+                        push(@newnewlist, $f);
+                }
+        }
 
-	@newlist = sort @newlist;
+
+
+	@newlist = sort @newnewlist;
 	print "newlist is now " . (join ",",@newlist) . "\n" if $verbose;
 	return @newlist;
 }
@@ -515,7 +544,7 @@ sub hardlinkfiles {
 	(my $tname = $name) =~ s|^./||;
 	my $tbasename = $tname;
 	
-	if  ( $tbasename =~ m|(.*)\.\w[\w-]*\.a\~$|  )
+	if  ( $tbasename =~ m|(.*)\.\w[\w\-\,]*\.a\~$|  )
 	{
 		$tbasename = $1;
 	}
