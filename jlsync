@@ -1,14 +1,189 @@
-#!/usr/bin/perl -w
+#!/usr/local/bin/perl -w
 
 # deploy - not yet useable
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $Id: jlsync,v 1.4 2002/03/18 02:37:43 plastic Exp $
+# $Id: jlsync,v 1.5 2004/05/18 19:02:17 plastic Exp $
+
+=head1 NAME
+
+deploy - rsync wrapper to deploy files from a central repository to
+client hosts
+
+=head1 SYNOPSIS
+
+    deploy [--real] [--verbose] clienthostname:/path/to/pushout
+
+    deploy --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
+
+=head1 DESCRIPTION
+
+deploy is a rsync wrapper that allows files and directories to be
+syncronised from a central repository to many client hosts. Files can
+be grouped into file templates that individual client hosts can
+"subscribe" to.  Deploy works well with ssh key authentication to avoid
+being prompted for remote client root passwords.
+
+=head2 Example usage
+
+To distribute /usr/java from the repository to a host called jav04
+run the following commands:
+
+First run
+
+	 deploy jav04:/usr/java  
+
+this will build the staging image and the do a pretend rsync to jav04
+with the --dry-run rsync option. Look closely at the output and verify
+the additions and deletions on the remote host are as expected. If
+everything is okay, then run
+
+	deploy --real jav04:/usr/java
+
+when the --real option is used the rsync to the client does not use the
+--dry-run option. BE CAREFUL, incorrect usage or incorrect
+configuration in the repository could easily result in the permanent
+deletion of important files on the client.
+
+To quickly gather files from a remote host back into the repostory the
+--get option can be used. By default gathered files will be added to
+the DEFAULT template however if the files already exist in the
+repository the files will be added the host template. A specific
+template can be named with the --mask option.  For example to get a
+freshly installed httpd binary back from client host web01 into the
+repostory for the file template "webservers" run
+
+	deloy --get --mask=webservers web01:/usr/local/apache/bin/httpd
+
+once the file is in the repository it can be deployed to other clients
+that subscribe to the webservers template.
+
+=head2 The config file
+
+For each client host the deploy.config file lists any file templates
+that hosts subscribes to. A template is made up of files and
+control files in the repository that share same template/mask name.
+Using templates is a convient way of grouping files that should only be
+deployed to a certain category of hosts such as "web servers" or
+"database servers".
+
+Every client must subscribe to the base template called DEFAULT.  Also
+each client also subscribes to a template that is the same as that
+client's hostname.
+
+Templates are layered one upon another to build the deploy image in the
+staging area before the image is rsync'ed to the client. Templates (and
+their associated control files) are applied in the same order as they
+are listed in the control file, ie. left to right.
+
+The following example deploy.config entry shows a host, jav04, entry
+that only contains the minimum of the DEFAULT template and it's own
+template.
+
+	DEFAULT	jav04
+
+The next example deploy.config entry shows a host, www05, who's final
+file image is made up of 2 additional file templates
+
+	DEFAULT webservers prodservers www05
+
+=head2 The respository 
+
+All the files for the all the file templates are stored in the
+repostitory under the same directory root. Control files for
+different templates are named with filename suffix .templatename.X~
+notation. Files in the DEFAULT template don't need the suffix notation.
+
+=head2 Control Files
+
+
+=head3 the Add .templatename.a~ controlfile
+
+Files and/or directories from the repository for a given template with
+with Add control file suffix, .templatename.a~ , get added to the final
+file image to be deloyed to the client.
+
+If a file/directory with same basename already exists in the file image
+(say from the DEFAULT template, or an earlier applied template) as a
+Add controlfile it will be overwritten. In this instance it's useful to
+think of Add controlfiles as a type of "replace" control file.
+
+=head3 the Delete .templatename.d~ controlfile
+
+If a file/directory exists in the file image (say from the DEFAULT
+template, or an earlier applied template) that should not be in the
+final file image for deployment to the client a Delete controlfile can
+be used to remove it. 
+
+Delete control files remove files from the final stageing area image.
+Rsync will delete files on remote hosts that aren't found in the local
+file image (that is unless they have also been excluded from the rsync
+comparision).
+
+The easiest way to create Delete and Exclude control files is to simply
+"touch" them.
+
+=head3 the Exclude .templatename.e~ controlfile
+
+Files with Exclude suffix, .templatename.e~ , are added to the list of
+files to be excluded from the rsync comparision. Any files/directories
+that are excluded will not be deployed from the staging area or
+updated/deleted from the client host.
+
+The following Exclude control file will cause the /var/run/sendmail.pid
+file to be be ignored (left alone) by the rsync for all client hosts
+
+	/var/run/sendmail.pid.DEFAULT.e~
+
+This next Exclude control file will cause the entire /var/mysql
+directory to be ignored for any client hosts that are listed with the
+"databaseservers" template in the deploy.config file.
+
+	/var/mysql.databaseservers.e~
+
+Exclude control files can also contain regular expressions (as defined
+and used by rsync) to match multiple files. For example, to exclude any
+file ending in .pid in /app/sendSMS use
+
+	/app/sendSMS/*.pid.DEFAULT.e~
+
+To exclude the syslog messages files (messages, messages.1, etc.) you
+could use
+
+	/var/log/messages*.DEFAULT.e~
+
+To exlude all files in a directory (but make sure the directory is part
+of the template) use something like
+
+	/var/mysql/*.databaseservers.e~
+
+=head1 TODO
+
+pre and post exec command control files?
+log files?
+friendly remote diff/cmp ?
+pager
+use File::Same
+
+
+=head1 SEE ALSO
+
+the rsync(1) man page.
+
+=head1 AUTHOR
+
+Jason Lee
+
+=cut
+
+
 
 use strict;
-use File::Find ();
+use Cwd;
+use File::Find ();	  	# recent version required.
 use File::Path;
+use File::stat;
 use File::Basename;
 use Getopt::Long;
 
@@ -19,32 +194,80 @@ use vars qw/*name *dir *prune $mask @excludepatterns @masks/;
 *dir    = *File::Find::dir;
 *prune  = *File::Find::prune;
 
+# config file
+my $config="/software/deploy.config";
+
+# path to rsync version 2.6.0 
+my $rsync="/usr/local/bin/rsync";
+
 # directories without trailing /
-my $deploydir = "/var/tmp/deploy";
+my $deploydir = "/software";
 my $src = $deploydir . "/src";
-my $stg = $deploydir . "/stg";
+my $stg = $deploydir . "/stg2";
 my $dst = $deploydir . "/dst";
 
-my $backup_dir = "/var/tmp/deploy/backup_dir";
+my $backup_dir = $deploydir . "/bak";
+my @controlfiles = (); # array of control file hashes.
 
 $| = 1; # turn on autoflush
 
+my $verbose = '';  
 my $real = '';  
 my $get = '';  
 my $getmask = '';  
-GetOptions( "real" =>\$real , 	# --real
-	    "get" =>\$get ,     # --get
-	    "mask=s" =>\$getmask ,# --mask
+GetOptions( "real" =>\$real , 		# --real
+	    "get" =>\$get ,     	# --get
+	    "verbose" =>\$verbose ,     # --verbose
+	    "mask=s" =>\$getmask ,	# --mask
 		);
 
 my $dryrun =  $real ? "" : "--dry-run";
 
-my $excludepatternfile = "/tmp/" . "spit" . time . $$;
+&usage unless (defined $ARGV[0] && $ARGV[0] =~ m|\w+:/|);
 my ( $client, $path ) = split (":",$ARGV[0]);
 $path = "/" unless ($path); 
 $path =~ s|^|/| unless ( $path =~ m|^/| ); 
+my $excludepatternfile = "/tmp/" . ".deploy-" . $client ."-". time ."-". $$;
 
 my @masks;
+open(MASK, $config) || die "can not open $config";
+while(<MASK>)
+{
+	s/\s+$//;
+	my @tmasks = split (/\s+/);
+	if ($tmasks[0] eq 'DEFAULT' && $tmasks[$#tmasks] eq $client )
+	{
+		@masks = @tmasks;
+		last;
+	}
+}
+close MASK;
+
+unless ($masks[$#masks] eq $client)
+{
+	print "$client not found in $config. exiting.\n";
+	exit 1;
+}
+
+my $lockfile = "$stg/${client}-lock";
+if ( -f $lockfile )
+{
+	print "deploy currently locked ( $lockfile ) by process id ";
+	system "cat",$lockfile;
+	print "\n";
+	exit 1;
+}
+else
+{
+	open(LOCK,">$lockfile") || die "could not create lockfile: $lockfile";
+	print LOCK $$;
+	close LOCK;
+}
+
+
+
+
+print "masks are " . ccode("red") . join(" ",@masks) . ccode("default") ."\n";
 
 &buildstage($client);
 
@@ -58,73 +281,206 @@ else
 }
 
 
-#unlink $excludepatternfile;
+unlink $excludepatternfile;
+unlink $lockfile;
 exit 0;
+
+sub usage
+{
+	print "deploy usage:\n";
+	print "deploy [--real] [--verbose ] client:/path/to/sync\n";
+	exit 1;
+}
 
 sub buildstage
 {
 	my $client = $_[0];
-	# check for any mask dependices
-	open(MASK,"deploy.config");
-	while(<MASK>)
-	{
-		s/\s+$//;
-		my @tmasks = split (/\s+/);
-		if ($tmasks[0] eq 'DEFAULT' && $tmasks[$#tmasks] eq $client )
-		{
-			@masks = @tmasks[0..($#tmasks -1 )];
-			last;
-		}
-	}
-	close MASK;
-	push @masks,$client;
 
-	print "masks are " . join(" ",@masks) . "\n";
+	# link files to staging area
 
-	@excludepatterns = ( "*.~" , "*.d~", "*.i~" );
-
-	# first copy files to staging area
 	my $command;
-	$command = "rsync --compress --archive --delete --recursive --links --rsh=ssh  --relative $src$path $stg/";
-	print "running $command\n"; 
-	system $command;
+	system "/bin/rm -rf $stg/$client"; if ( $? !=0 ) {  die "could not /bin/rm -rf $stg/$client"; }
+	mkdir "$stg/$client" or die "could not mkdir $stg/$client";
 
-	# Traverse desired filesystem (loop by mask or function first?)
-	#my $mask;
-	foreach $mask (@masks)
-	{
-		chdir $stg; # keep it relative
-		File::Find::find({wanted => \&delete, no_chdir => 1}, "." );
-		File::Find::find({wanted => \&add, no_chdir => 1}, "." );
-		File::Find::find({wanted => \&ignore, no_chdir => 1}, "." );
-	}
+	chdir $src;
+	print "pwd is now $src (repository area root)\n";
 
+	File::Find::find({ 
+			preprocess => \&filtercontrolfiles, 
+			wanted => \&hardlinkfiles, 
+			postprocess => \&setdirdate, 
+			no_chdir => 1
+				}, "." );
 
-	print "ignored files are:\n" . join ("\n",@excludepatterns) . "\n";
+	 s|^\.|| foreach @excludepatterns;
+	print "excluded files are:\n" . join ("\n",@excludepatterns) . "\n";
 	open(TMP,">$excludepatternfile");
 	print TMP join ("\n",@excludepatterns) . "\n";
 	close TMP;
 }
 
+sub filtercontrolfiles {
+	my @filelist = @_;
+	my @newlist = sort @filelist ;
+	print "predir is $dir\n" if $verbose;
+	print "newlist is " . (join ",",@newlist) . "\n" if $verbose;
+	foreach $mask (reverse @masks)
+	{
+		my @alist = grep  /.$mask.a~$/  , @newlist;
+		my $a;
+		foreach $a (@alist)
+		{
+			print "a is $a\n" if $verbose;
+			(my $basename = $a) =~ s/.$mask.a~$//;
+			@newlist = grep !/^\Q$basename\E/,@newlist;
+			push (@newlist,$a);
+		}
+
+		my @dlist = grep  /.$mask.d~$/  , @newlist;
+		my $d;
+		foreach $d (@dlist)
+		{
+			print "d is $d\n" if $verbose;
+			(my $basename = $d) =~ s/.$mask.d~$//;
+			@newlist = grep !/^\Q$basename\E/,@newlist;
+		}
+
+		my @elist = grep  /.$mask.e~$/  , @newlist;
+		my $e;
+		foreach $e (@elist)
+		{
+			print "e is $e\n" if $verbose;
+			(my $basename = $e) =~ s/.$mask.e~$//;
+			@newlist = grep !/^\Q$basename\E/,@newlist;
+			push (@excludepatterns, $dir ."/". $basename);
+		}
+	}
+
+	# strip out any remaining control files for other masks.
+	my $a;
+	my @newnewlist;
+	foreach $a (@newlist)
+	{
+		if ( $a =~ /\.(\w+)\.a\~$/ )
+		{
+			my $mask = $1;
+			push(@newnewlist, $a) if grep /^$mask$/, @masks;
+		}
+		elsif ( $a =~ /\.[ed]\~$/ )
+		{
+			# must be other masks.
+			next;
+		}
+		else
+		{
+			push(@newnewlist, $a);
+		}
+	}
+
+	@newlist = sort @newnewlist;
+	print "newlist is now " . (join ",",@newlist) . "\n" if $verbose;
+	return @newlist;
+}
+
+sub hardlinkfiles {
+
+	(my $tname = $name) =~ s|^./||;
+	my $tbasename = $tname;
+	
+	if  ( $tbasename =~ m|(.*)\.\w+\.a\~$|  )
+	{
+		$tbasename = $1;
+	}
+
+	# TODO: fix File::stat conflict
+	lstat $name ; # need lstat not stat to correctly identify symlinks
+
+	if ( -f _ )
+	{
+		print "$name is a file\n" if $verbose;
+		link("$src/$tname","$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
+	}
+	elsif ( -d _ ) # -d on symlink to a dir will succeed on linux/ext2fs
+	{
+		print "$name is a dir\n" if $verbose;
+		mkdir "$stg/$client/$tname"|| die "unable to mkdir $stg/$client/$tname";
+	}
+	elsif ( -l _ )
+	{
+		print "$name is a symlink\n" if $verbose;
+		link("$src/$tname","$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
+	}
+	else
+	{
+		print "not a file, symlink or directory: $name\n";
+	}
+}
+
+sub setdirdate {
+	(my $tdir = $dir) =~ s|^./||;
+	my $tbasedir = $tdir;
+	if  ( $tbasedir =~ m|(.*)\.\w+\.a\~$|  )
+	{
+		$tbasedir = $1;
+		rename "$stg/$client/$tdir","$stg/$client/$tbasedir";
+	}
+	utime(time, stat($dir)->mtime, "$stg/$client/$tbasedir");
+}
+
+sub getcontrolfiles {
+	if ( $name =~ /^(.*)\.(\w+).([dae])~\z/s )
+	{
+		my $target = $1;
+		my $mask = $2;
+		my $controltype = $3;
+		push(@controlfiles, { "name" => $name, "target" => $target, "mask" => $mask, "controltype" => $controltype } );
+	}
+}
+
 sub deploy
 {
-	# now copy files from stage to destination
-	my $command = "rsync $dryrun --verbose --compress --archive --delete --recursive --links --rsh=ssh --exclude-from=$excludepatternfile  $stg$path $client:$path";
-	print "running $command\n";
+	chdir "$stg/$client";
+	print "pwd is now $stg/$client (staging area root)\n";
+	unless (  $real )
+	{
+		&deploy_rsync("--dry-run");
+
+		# ask question.
+		print "would your like run rsync now for real? [yes/No] ";
+		my $answer = <STDIN>;
+		if ( $answer =~ /^y/i )
+		{
+			$real = 1;	
+		}
+	}
+	if ( $real )
+	{
+		&deploy_rsync("");
+	}
+}
+
+sub deploy_rsync
+{
+	my $dryrun = $_[0];
+	my $command = "$rsync $dryrun --verbose --compress --archive --delete --recursive --links --relative --rsh=/usr/local/bin/ssh --rsync-path=/usr/local/bin/rsync --exclude-from=$excludepatternfile  .$path $client:/";
+	print "running ". &ccode("blue") . $command . &ccode("default") . "\n";
 	system $command;
 }
 
-sub delete {
-		if ( $name =~ /^(.*)\.${mask}\.d~\z/s )
-		{
-			my $target = $1;
-			print "removing $target";
-			rmtree($target); 
-		}
+sub delete 
+{
+	my $name = $_[0];
+	if ( $name =~ /^(.*)\.${mask}\.d~\z/s )
+	{
+		my $target = $1;
+		print "removing $target\n";
+		rmtree($target); 
+	}
 }
 
 sub add {
-	if ( $name =~ /^(.*)\.${mask}\.~\z/s )
+	my $name = $_[0];
+	if ( $name =~ /^(.*)\.${mask}\.a~\z/s )
 	{
 		my $target = $1;
 		if ( -e $target )
@@ -137,12 +493,13 @@ sub add {
 	}
 }
 
-sub ignore {
-	if (  $name =~ /^(.*)\.${mask}\.i~\z/s )
+sub exclude {
+	my $name = $_[0];
+	if (  $name =~ /^(.*)\.${mask}\.e~\z/s )
 	{
 		my $target = $1;
 		(my $targetpathname =  $target ) =~ s|^\.|| ;
-		print("excluding $targetpathname\n");
+		print "excluding $targetpathname\n";
 		push (@excludepatterns, $targetpathname);
 	}
 }
@@ -150,14 +507,16 @@ sub ignore {
 
 sub get
 {
-	my $get = $path;
 	my $target;
-	my $stgget = $stg . $get;
-	my $srcget = $src . $get;
+	my $stgget = $stg . "/" . $client . $path;
+	my $srcget = $src . $path;
+	my $stggettmp = $stg . "/" . $client . "-get";
+	my $stggettmppath = $stggettmp  . $path ;
 
         # if no getmask is supplied then DEFAULT is used if the files
-        # don't already exist in the repostor with DEFAULT mask, or if
+        # don't already exist in the repostory with DEFAULT mask, or if
         # they do exist then the client's own mask is used.
+
 	if ( ! $getmask )
 	{
 		if ( -e $srcget )
@@ -172,59 +531,152 @@ sub get
 	
 	if ( $getmask eq "DEFAULT" )
 	{
-		$target = $src . $get;
+		$target = $src . $path;
 	}
 	else
 	{
-		$target = $src . $get . "." . $getmask . ".\~";
+		$target = $src . $path . "." . $getmask . ".a\~";
 	}
 
 	# now copy files from destination back into staging 
+	# - no could overwrite contents of hard linked files?
 
-	print "rsync --compress --archive --rsh=ssh --exclude-from=$excludepatternfile --delete   --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$get $stg \n";
-	open(RSYNC, "rsync --compress --archive --rsh=ssh --exclude-from=$excludepatternfile --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$get $stg |") ;
-	my @changes = (<RSYNC>);
-	close RSYNC;
-	
-	print "changes are:\n",@changes,"\n";
+	my $command = "$rsync --compress --archive --rsh=/usr/local/bin/ssh --exclude-from=$excludepatternfile --delete   --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
 
-
-	# maybe need to add check if a directory is being replaced with a file.
-
-	# rsync up...
-
-	my $s = "$stg$get";
-	if ( -d  $s )
-	{
-		$s =~ s|$|/| ;
-		system "mkdir","-p",$target;
-	}
-	else
-	{
-		system "mkdir","-p",basename($target);
-	}
-
-	my $command;
-	$command = "rsync --compress --archive --delete --exclude-from=$excludepatternfile --recursive --links --rsh=ssh  $s $target";
-	print "running $command\n"; 
+	print "running " . &ccode("blue") . $command . &ccode("default") ."\n";
 	system $command;
 
-	# now check for i~ or d~ obscructions
-	my $base = $src . $get ;
-	if ( $getmask ne "DEFAULT" )
+	# maybe need to add check if a directory is being replaced with a file.
+	# decide what to do, then...
+
+	# symlink up again? or use rdist?
+
+	if ( -e $stgget )
 	{
-		$base .=  "." . $getmask ;
-	}
-		
-	my $ex;
-	foreach  $ex ( ".i~", ".d~" )
-	{
-		my $baseex = $base . $ex;
-		if ( -e $baseex )
+		print "current image version for $client is\n$stgget\n";
+		chdir dirname($stgget);
+		system "ls","-ld", basename($stgget);
+		if ( -d $stgget ) 
 		{
-			print "deleteing  $baseex\n";
-			rmtree ($baseex);
+			print "number of files: ";
+			system "find $stgget -print | wc -l";
 		}
 	}
+	if ( -e $target )
+	{
+		my $same = 'no';
+		if ( -e $stgget) 
+		{
+			print " stat($stgget)->ino is " . stat($stgget)->ino . "\n";
+			print " stat($target)->ino is " . stat($target)->ino . "\n";
+			$same = 'yes' if ( stat($stgget)->ino 
+						eq stat($target)->ino );
+		}
+		if ( $same eq 'no' )
+		{
+			print "current repository version is\n$target\n";
+			dirname($target);
+			system "ls","-ld",basename($target);
+			if ( -d $target ) 
+			{
+				print "number of files: ";
+				system "find $target -print | wc -l";
+			}
+		}
+	}
+	
+	print "remote version just got is...\n$stggettmppath\n";
+	chdir dirname($stggettmppath);
+	system "ls","-ld",basename($stggettmppath);
+	if ( -d $stggettmppath ) 
+	{
+		print "number of files: ";
+		system "find $stggettmp -print | wc -l";
+	}
+
+	unless ( $real )
+	{
+		print ccode("green");
+		print "$stggettmppath\n";
+		print "will be copied to\n";
+		print "$target\n";
+		print ccode("default");
+		print "would your like replace files for real? [yes/No] ";
+		my $answer = <STDIN>;
+		if ( $answer =~ /^y/i )
+		{
+			$real = 1;	
+		}
+	}
+
+	# TODO: it would be nice to preserve control files in any 
+	# subdirectories in the repository....
+
+	# TODO: need to preserve ownership & permisions of parent directories.
+
+	if ( $real )
+	{
+		$verbose=1;
+		print "rmtree($target)\n" if ($verbose);
+		rmtree($target); 
+		print "mkdir -p " . dirname($target) . "\n" if ($verbose);
+		system "mkdir","-p",dirname($target);
+		print "rename($stggettmppath, $target)\n" if ($verbose);
+		rename($stggettmppath, $target) || die "unable to rename $stggettmp to $target";
+
+	}
+
+
+
+#	# now check for e~ or d~ obscructions # too hard?
+#	my $base = $src . $get ;
+#	if ( $getmask ne "DEFAULT" )
+#	{
+#		$base .=  "." . $getmask ;
+#	}
+#		
+#	my $ex;
+#	foreach  $ex ( ".e~", ".d~" )
+#	{
+#		my $baseex = $base . $ex;
+#		if ( -e $baseex )
+#		{
+#			print "deleteing  $baseex\n";
+#			rmtree ($baseex);
+#		}
+#	}
+
+
 }
+
+# color codes
+sub ccode {
+
+	my %attribute = (
+	  'default'    => "\033[0m",
+	  'black'      => "\033[30m",
+	  'red'        => "\033[31m",
+	  'green'      => "\033[32m",
+	  'yellow'     => "\033[33m",
+	  'blue'       => "\033[34m",
+	  'magenta'    => "\033[35m",
+	  'cyan'       => "\033[36m",
+	  'white'      => "\033[37m",
+	  'normal'     => "\033[00m",
+	  'bright'     => "\033[01m",
+	  'underlined' => "\033[04m",
+	  'blinking'   => "\033[05m",
+	  'background' => "\033[07m",
+	  'beep'       => "\007"
+	);
+
+	my ($modifier) = @_;
+	my @attribs = split ( / /, $modifier );
+	my $code = "";
+	for my $attrib(@attribs) {
+		$code .= $attribute{$attrib} if defined $attribute{$attrib};
+	}
+	return $code;
+}
+
 
