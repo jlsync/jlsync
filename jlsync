@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.25 2005/03/18 15:31:11 plastic Exp $
+# $Id: jlsync,v 1.26 2005/03/22 22:12:24 plastic Exp $
 
 =head1 NAME
 
@@ -562,6 +562,9 @@ sub hardlinkfiles {
 	}
 	elsif ( -l _ )
 	{
+		# Need some special code here to handle copying or 
+		# hardlink of relative symlinks
+
 		print "$name is a symlink\n" if $verbose;
 		link("$src/$tname","$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
 	}
