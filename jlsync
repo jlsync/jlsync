@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.28 2005/03/27 19:35:22 plastic Exp $
+# $Id: jlsync,v 1.29 2005/03/28 20:40:30 plastic Exp $
 
 =head1 NAME
 
@@ -285,6 +285,7 @@ my $client = '';
 my $path = '';
 my $verbose = '';  
 my $report = '';  
+my $silient = '';  
 my $reporttext = '';  
 my $real = '';  
 my $get = '';  
@@ -297,10 +298,12 @@ GetOptions( "real" =>\$real , 		# --real
 	    "nocolor" =>\$nocolor ,     # --nocolor
 	    "nocolour" =>\$nocolor ,    # --nocolor
 	    "mask=s" =>\$getmask ,	# --mask
+	    "silient" =>\$silient ,     # --silient available on commandline for testing
 	);
 
 	
 &usage unless (defined $ARGV[0]);
+
 foreach my $arg (@ARGV)
 {
 	&usage unless ($arg =~ m|\w[\w-]*:/|);
@@ -310,6 +313,8 @@ if ( ( $real && $report) || ( $get && $report ) )
 {
 	&usage;
 }
+
+$silient = 1 if $report;
 
 foreach my $arg (@ARGV)
 {
@@ -387,8 +392,7 @@ foreach $client (keys %cph)
 
 foreach $client (keys %cph)
 {
-	print "exclude patterns for "  . RED . BOLD . $client . RESET.  " are:\n" . ON_CYAN . "\n"
-		. join ("\n",@{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n";
+	print "exclude patterns for "  . RED . BOLD . $client . RESET.  " are:\n" . ON_CYAN . "\n"  . join ("\n",@{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n" unless $silient;
 
 	@excludepatterns = @{$cph{$client}->{excludepatterns}} ;
 
@@ -446,19 +450,19 @@ sub buildstage
 	$client = $_[0];
 	@masks = @{$maskshash{$client}}; # @masks is a global var
 
-	print "masks are ".RED.BOLD.join(" ",@{$maskshash{$client}}) .RESET.".\n";
+	print "masks are ".RED.BOLD.join(" ",@{$maskshash{$client}}) .RESET.".\n" unless $silient; 
 
 	print "buildstage: client: $client  masks: " . join(',',@masks) . "\n" if $verbose;
 
-	print "deleting old image for $client in $stg/$client ... ";
+	print "deleting old image for $client in $stg/$client ... " unless $silient;
 	system "/bin/rm -rf $stg/$client"; if ( $? !=0 ) {  die "could not /bin/rm -rf $stg/$client"; }
-	print "done.\n";
+	print "done.\n" unless $silient;
 
 	chdir $src;
 	print "pwd is now $src (repository area root)\n" if $verbose;
 
 	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
-	print "building new image for $client in $stg/$client ... ";
+	print "building new image for $client in $stg/$client ... " unless $silient;
 
 	# link files to staging area
 	File::Find::find({ 
@@ -469,7 +473,7 @@ sub buildstage
 				}, "." );
 	nospin();
 
-	print "done.\n";
+	print "done.\n" unless $silient;
 
 	s|^\.|| foreach @excludepatterns;
 
@@ -670,10 +674,13 @@ sub deploy_rsync
 	my $client = $_[1];
 	my $path = $_[2];
 	my $command = "$rsync $rsync_opts $dryrun --verbose --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
-	print ($dryrun ? "running dry-run first for ${client}:${path} ...\n" : "running rsync for real for ${client}:${path} ...\n");
-	print ($dryrun ? ON_YELLOW BOLD : ON_GREEN BOLD);
-	print $command . "\n";
-	print RESET . ($dryrun ? ON_YELLOW : ON_GREEN );
+	unless ($silient)
+	{
+		print ($dryrun ? "running dry-run first for ${client}:${path} ...\n" : "running rsync for real for ${client}:${path} ...\n") ;
+		print ($dryrun ? ON_YELLOW BOLD : ON_GREEN BOLD) ;
+		print $command . "\n" ;
+		print RESET . ($dryrun ? ON_YELLOW : ON_GREEN );
+	}
 	#system $command;
 	open (RSYNC, "$command|") || die 'can not open $command';
 	while (<RSYNC>)
@@ -688,7 +695,7 @@ sub deploy_rsync
 		}
 	}
 	close RSYNC;
-	print RESET ."\n";
+	print RESET ."\n" unless $silient;
 }
 
 sub delete 
@@ -898,9 +905,11 @@ sub get
 }
 
 
-# spin code from http://dreamscape.org/code/spin - slf@dreamscape.org - steven fountain
+
+# spin code taken from http://dreamscape.org/code/spin - slf@dreamscape.org - steven fountain
 sub spin
 {
+	return if $silient;
 	#my @spinchars = qw(. o O o);
 	my @spinchars = qw(- / | \\);
 	$spinlen = @spinchars; # count chars to spin
@@ -914,9 +923,11 @@ sub spin
 
 sub nospin
 {
+	return if $silient;
 	print "\b" if $spinning; # backspace over the last character
 	undef $spinning;
 	$spinpos = 0;
 }
+
 
 
