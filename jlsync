@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.14 2004/10/10 18:43:26 plastic Exp $
+# $Id: jlsync,v 1.15 2004/10/10 22:33:52 plastic Exp $
 
 =head1 NAME
 
@@ -595,6 +595,9 @@ sub get
 
 	# symlink up again? or use rdist?
 
+	my $possiblesource2;
+	my $possiblesource;
+
 	if ( -e $stgget )
 	{
 		print "current image version for $client is\n";
@@ -608,30 +611,54 @@ sub get
 			print "number of files: ";
 			system "find $stgget -print | wc -l";
 		}
-	}
-	if ( -e $target )
-	{
-		my $same = 'no';
-		if ( -e $stgget) 
+		print "taken from repository version...\n";
+		my $confirmed;
+		foreach $possiblesource (  ( map $srcget . "." . $_ . ".a~", reverse @{$maskshash{$client}}), $srcget) 
 		{
-			print "$stgget inode is " . (stat($stgget))[1] . "\n";
-			print "$target inode is " . (stat($target))[1] . "\n";
-			$same = 'yes' if ( (stat($stgget))[1]
-						eq (stat($target))[1] );
-		}
-		if ( $same eq 'no' )
-		{
-			print "current repository version is\n";
-			print  BLUE . "$target\n" . RESET ;
-			chdir dirname($target);
-			print GREEN;
-			system "ls","-ld",basename($target);
-			print RESET;
-			if ( -d $target ) 
+			if ( -e $possiblesource )
 			{
-				print "number of files: ";
-				system "find $target -print | wc -l";
+				if ( -f $possiblesource )
+				{
+					if ( (stat($stgget))[1] == (stat($possiblesource))[1] )
+					{
+						$confirmed = "confirmed";
+					}
+					else
+					{
+						$confirmed = "warning: inter-directory control file conflict exists";
+					}
+				}
+				else
+				{
+					$confirmed = "not confirmed";
+				}
+				$possiblesource2 = $possiblesource;
+				last;
 			}
+		}
+		print BLUE . "$possiblesource2 ($confirmed)\n" . RESET ;
+		chdir dirname($possiblesource2);
+		print GREEN;
+		system "ls","-ld", basename($possiblesource2);
+		print RESET;
+		if ( -d $possiblesource2 ) 
+		{
+			print "number of files: ";
+			system "find $possiblesource2 -print | wc -l";
+		}
+	}
+	if ( -e $target  && ( $target ne $possiblesource2 ) )
+	{
+		print "current repository target version is\n";
+		print  BLUE . "$target\n" . RESET ;
+		chdir dirname($target);
+		print GREEN;
+		system "ls","-ld",basename($target);
+		print RESET;
+		if ( -d $target ) 
+		{
+			print "number of files: ";
+			system "find $target -print | wc -l";
 		}
 	}
 	
@@ -648,10 +675,7 @@ sub get
 
 	unless ( $real )
 	{
-		print BLUE;
-		print "$stggettmppath\n";
-		print RESET;
-		print "will be copied to\n";
+		print "this will be copied to...\n";
 		print BLUE;
 		print "$target\n";
 		print RESET;
@@ -670,7 +694,7 @@ sub get
 
 	if ( $real )
 	{
-		print "updating $target ... ";
+		print "updating " . BLUE . $target . RESET . "... ";
 		print "rmtree($target)\n" if ($verbose);
 		rmtree($target); 
 		print "mkpath" . dirname($target) . "\n" if ($verbose);
