@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.27 2005/03/26 11:17:05 plastic Exp $
+# $Id: jlsync,v 1.28 2005/03/27 19:35:22 plastic Exp $
 
 =head1 NAME
 
@@ -265,10 +265,10 @@ my $deploydir = "/software";
 my $src = $deploydir . "/src";
 my $stg = $deploydir . "/stg2";
 my $dst = $deploydir . "/dst";
+my $backup_dir = $deploydir . "/bak";
 
 my $abletolinktosymlinks = 0 ; # linux = 1 , solaris = 0 ;
 
-my $backup_dir = $deploydir . "/bak";
 my @controlfiles = (); # array of control file hashes.
 
 $| = 1; # turn on autoflush
@@ -284,6 +284,8 @@ my %cph ;  # Client Path Hash
 my $client = '';
 my $path = '';
 my $verbose = '';  
+my $report = '';  
+my $reporttext = '';  
 my $real = '';  
 my $get = '';  
 my $getmask = '';  
@@ -291,6 +293,7 @@ my $nocolor = '';
 GetOptions( "real" =>\$real , 		# --real
 	    "get" =>\$get ,     	# --get
 	    "verbose" =>\$verbose ,     # --verbose
+	    "report" =>\$report ,       # --report
 	    "nocolor" =>\$nocolor ,     # --nocolor
 	    "nocolour" =>\$nocolor ,    # --nocolor
 	    "mask=s" =>\$getmask ,	# --mask
@@ -301,6 +304,11 @@ GetOptions( "real" =>\$real , 		# --real
 foreach my $arg (@ARGV)
 {
 	&usage unless ($arg =~ m|\w[\w-]*:/|);
+}
+
+if ( ( $real && $report) || ( $get && $report ) )
+{
+	&usage;
 }
 
 foreach my $arg (@ARGV)
@@ -412,7 +420,18 @@ foreach $client (keys %cph)
 	unlink $lockfile;
 }
 
+if ( $report)
+{
+	print "report is as follows.....................\n";
+	print $reporttext;
+	print "..............end of report is as follows\n";
+}
+
 exit 0;
+
+######################################################
+
+
 
 sub usage
 {
@@ -578,7 +597,7 @@ sub hardlinkfiles {
 			my $target = readlink;
 			# create new symlink like original
 			symlink( $target , "$stg/$client/$tbasename") || die "unable to symlink $target to $stg/$client/$tbasename";
-			# set timestamp # THIS IS NOT WORKING....
+			# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
 			# utime(time, (lstat($name))[9], "$stg/$client/$tbasename");
 		}
 	}
@@ -620,21 +639,28 @@ sub deploy
 	print "deploy: client: $client  path: $path\n" if $verbose;
 	chdir "$stg/$client";
 	print "pwd is now $stg/$client (staging area root)\n" if $verbose;
-	unless ( $real )
+	if ( $report )
 	{
 		&deploy_rsync("--dry-run",$client,$path);
-
-		# ask question.
-		print "would your like run rsync now for real? [yes/No] ";
-		my $answer = <STDIN>;
-		if ( $answer =~ /^y/i )
-		{
-			$yes = 1;	
-		}
 	}
-	if ( $real || $yes )
+	else
 	{
-		&deploy_rsync("",$client,$path);
+		unless ( $real )
+		{
+			&deploy_rsync("--dry-run",$client,$path);
+
+			# ask question.
+			print "would your like run rsync now for real? [yes/No] ";
+			my $answer = <STDIN>;
+			if ( $answer =~ /^y/i )
+			{
+				$yes = 1;	
+			}
+		}
+		if ( $real || $yes )
+		{
+			&deploy_rsync("",$client,$path);
+		}
 	}
 }
 
@@ -648,7 +674,20 @@ sub deploy_rsync
 	print ($dryrun ? ON_YELLOW BOLD : ON_GREEN BOLD);
 	print $command . "\n";
 	print RESET . ($dryrun ? ON_YELLOW : ON_GREEN );
-	system $command;
+	#system $command;
+	open (RSYNC, "$command|") || die 'can not open $command';
+	while (<RSYNC>)
+	{
+		if ( $report )
+		{
+			$reporttext .= $_;
+		}
+		else
+		{
+			print $_;
+		}
+	}
+	close RSYNC;
 	print RESET ."\n";
 }
 
