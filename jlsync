@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.26 2005/03/22 22:12:24 plastic Exp $
+# $Id: jlsync,v 1.27 2005/03/26 11:17:05 plastic Exp $
 
 =head1 NAME
 
@@ -265,6 +265,8 @@ my $deploydir = "/software";
 my $src = $deploydir . "/src";
 my $stg = $deploydir . "/stg2";
 my $dst = $deploydir . "/dst";
+
+my $abletolinktosymlinks = 0 ; # linux = 1 , solaris = 0 ;
 
 my $backup_dir = $deploydir . "/bak";
 my @controlfiles = (); # array of control file hashes.
@@ -566,7 +568,19 @@ sub hardlinkfiles {
 		# hardlink of relative symlinks
 
 		print "$name is a symlink\n" if $verbose;
-		link("$src/$tname","$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
+		if ( $abletolinktosymlinks )
+		{
+			link("$src/$tname","$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
+		}
+		else
+		{
+			# deference symlink
+			my $target = readlink;
+			# create new symlink like original
+			symlink( $target , "$stg/$client/$tbasename") || die "unable to symlink $target to $stg/$client/$tbasename";
+			# set timestamp # THIS IS NOT WORKING....
+			# utime(time, (lstat($name))[9], "$stg/$client/$tbasename");
+		}
 	}
 	else
 	{
