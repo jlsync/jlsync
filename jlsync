@@ -4,7 +4,7 @@
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $Id: jlsync,v 1.9 2004/06/01 10:30:08 plastic Exp $
+# $Id: jlsync,v 1.10 2004/06/01 16:56:51 plastic Exp $
 
 =head1 NAME
 
@@ -230,7 +230,7 @@ GetOptions( "real" =>\$real , 		# --real
 
 my $dryrun =  $real ? "" : "--dry-run";
 
-&usage unless (defined $ARGV[0] && $ARGV[0] =~ m|\w+:/|);
+&usage unless (defined $ARGV[0] && $ARGV[0] =~ m|\w[\w-]*:/|);
 my ( $client, $path ) = split (":",$ARGV[0]);
 $path = "/" unless ($path); 
 $path =~ s|^|/| unless ( $path =~ m|^/| ); 
@@ -333,35 +333,35 @@ sub filtercontrolfiles {
 	print "newlist is " . (join ",",@newlist) . "\n" if $verbose;
 	foreach $mask (reverse @masks)
 	{
-		my @alist = grep  /.$mask.a~$/  , @newlist;
+		my @alist = grep  /\.$mask\.a~$/  , @newlist;
 		my $a;
 		foreach $a (@alist)
 		{
 			print "a is $a\n" if $verbose;
-			(my $basename = $a) =~ s/.$mask.a~$//;
+			(my $basename = $a) =~ s/\.$mask\.a~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w+\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*\.[ade]\~$/,@newlist;
 			push (@newlist,$a);
 		}
 
-		my @dlist = grep  /.$mask.d~$/  , @newlist;
+		my @dlist = grep  /\.$mask\.d~$/  , @newlist;
 		my $d;
 		foreach $d (@dlist)
 		{
 			print "d is $d\n" if $verbose;
-			(my $basename = $d) =~ s/.$mask.d~$//;
+			(my $basename = $d) =~ s/\.$mask\.d~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w+\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*\.[ade]\~$/,@newlist;
 		}
 
-		my @elist = grep  /.$mask.e~$/  , @newlist;
+		my @elist = grep  /\.$mask\.e~$/  , @newlist;
 		my $e;
 		foreach $e (@elist)
 		{
 			print "e is $e\n" if $verbose;
-			(my $basename = $e) =~ s/.$mask.e~$//;
+			(my $basename = $e) =~ s/\.$mask\.e~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w+\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*\.[ade]\~$/,@newlist;
 			push (@excludepatterns, $dir ."/". $basename);
 		}
 	}
@@ -371,7 +371,7 @@ sub filtercontrolfiles {
 	my @newnewlist;
 	foreach $a (@newlist)
 	{
-		if ( $a =~ /\.(\w+)\.a\~$/ )
+		if ( $a =~ /\.(\w[\w-]*)\.a\~$/ )
 		{
 			my $mask = $1;
 			push(@newnewlist, $a) if grep /^$mask$/, @masks;
@@ -397,7 +397,7 @@ sub hardlinkfiles {
 	(my $tname = $name) =~ s|^./||;
 	my $tbasename = $tname;
 	
-	if  ( $tbasename =~ m|(.*)\.\w+\.a\~$|  )
+	if  ( $tbasename =~ m|(.*)\.\w[\w-]*\.a\~$|  )
 	{
 		$tbasename = $1;
 	}
@@ -431,7 +431,7 @@ sub hardlinkfiles {
 sub setdirdate {
 	(my $tdir = $dir) =~ s|^./||;
 	my $tbasedir = $tdir;
-	if  ( $tbasedir =~ m|(.*)\.\w+\.a\~$|  )
+	if  ( $tbasedir =~ m|(.*)\.\w[\w-]*\.a\~$|  )
 	{
 		$tbasedir = $1;
 		rename "$stg/$client/$tdir","$stg/$client/$tbasedir";
@@ -440,7 +440,7 @@ sub setdirdate {
 }
 
 sub getcontrolfiles {
-	if ( $name =~ /^(.*)\.(\w+).([dae])~\z/s )
+	if ( $name =~ /^(.*)\.(\w[\w-]*).([dae])~\z/s )
 	{
 		my $target = $1;
 		my $mask = $2;
