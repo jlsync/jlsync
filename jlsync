@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.31 2005/04/01 00:29:22 plastic Exp $
+# $Id: jlsync,v 1.32 2005/04/05 10:25:36 plastic Exp $
 
 =head1 NAME
 
@@ -261,11 +261,10 @@ my $rsync="/usr/local/bin/rsync";
 my $rsync_opts = "--rsync-path=/usr/local/bin/rsync --rsh=/usr/local/bin/ssh";
 
 # directories without trailing /
-my $jlsyncdir = "/software";
-my $src = $jlsyncdir . "/src";
-my $stg = $jlsyncdir . "/stg2";
-my $dst = $jlsyncdir . "/dst";
-my $backup_dir = $jlsyncdir . "/bak";
+my $jlsyncdir = "/jlsync";
+my $src = $jlsyncdir . "/source";
+my $stg = $jlsyncdir . "/stage";
+my $backup_dir = $jlsyncdir . "/backup";
 
 my $abletolinktosymlinks = 0 ; # linux = 1 , solaris = 0 ;
 
