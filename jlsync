@@ -4,7 +4,7 @@
 #
 # Jason Lee, deploy@jason-lee.net.au, March 2002
 #
-# $Id: jlsync,v 1.7 2004/05/21 15:22:02 plastic Exp $
+# $Id: jlsync,v 1.8 2004/05/21 16:36:29 plastic Exp $
 
 =head1 NAME
 
@@ -319,7 +319,7 @@ sub buildstage
 			no_chdir => 1
 				}, "." );
 
-	 s|^\.|| foreach @excludepatterns;
+	s|^\.|| foreach @excludepatterns;
 	print "excluded files are:\n" . join ("\n",@excludepatterns) . "\n";
 	open(TMP,">$excludepatternfile");
 	print TMP join ("\n",@excludepatterns) . "\n";
@@ -472,7 +472,7 @@ sub deploy_rsync
 {
 	my $dryrun = $_[0];
 	my $command = "$rsync $dryrun --verbose --compress --archive --delete --recursive --links --relative --rsh=/usr/local/bin/ssh --rsync-path=/usr/local/bin/rsync --exclude-from=$excludepatternfile  .$path $client:/";
-	print "running ". &ccode("blue") . $command . &ccode("default") . "\n";
+	print "running ". &ccode("green") . $command . &ccode("default") . "\n";
 	system $command;
 }
 
@@ -552,7 +552,7 @@ sub get
 
 	my $command = "$rsync --compress --archive --rsh=/usr/local/bin/ssh --exclude-from=$excludepatternfile --delete   --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
 
-	print "running " . &ccode("blue") . $command . &ccode("default") ."\n";
+	print "running " . &ccode("green") . $command . &ccode("default") ."\n";
 	system $command;
 
 	# maybe need to add check if a directory is being replaced with a file.
@@ -583,8 +583,9 @@ sub get
 		}
 		if ( $same eq 'no' )
 		{
-			print "current repository version is\n$target\n";
-			dirname($target);
+			print "current repository version is\n";
+			print  ccode("blue") . "$target\n" . ccode("default") ;
+			chdir dirname($target);
 			system "ls","-ld",basename($target);
 			if ( -d $target ) 
 			{
@@ -594,7 +595,7 @@ sub get
 		}
 	}
 	
-	print "remote version just got is...\n$stggettmppath\n";
+	print "remote version just got is...\n" . ccode("blue") . "$stggettmppath\n" . ccode("default");
 	chdir dirname($stggettmppath);
 	system "ls","-ld",basename($stggettmppath);
 	if ( -d $stggettmppath ) 
@@ -605,9 +606,11 @@ sub get
 
 	unless ( $real )
 	{
-		print ccode("green");
+		print ccode("blue");
 		print "$stggettmppath\n";
+		print ccode("default");
 		print "will be copied to\n";
+		print ccode("blue");
 		print "$target\n";
 		print ccode("default");
 		print "would your like replace files for real? [yes/No] ";
@@ -628,8 +631,8 @@ sub get
 		print "updating $target ... ";
 		print "rmtree($target)\n" if ($verbose);
 		rmtree($target); 
-		print "mkdir -p " . dirname($target) . "\n" if ($verbose);
-		system "mkdir","-p",dirname($target);
+		print "mkpath" . dirname($target) . "\n" if ($verbose);
+		mkpath dirname($target), 0, 0755;
 		print "rename($stggettmppath, $target)\n" if ($verbose);
 		rename($stggettmppath, $target) || die "unable to rename $stggettmp to $target";
 		print "done.\n";
