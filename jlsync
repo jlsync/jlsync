@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.19 2005/03/07 18:57:59 plastic Exp $
+# $Id: jlsync,v 1.20 2005/03/07 19:08:32 plastic Exp $
 
 =head1 NAME
 
@@ -469,41 +469,41 @@ sub filtercontrolfiles {
 
 	foreach $mask (reverse @masks)
 	{
-		my @alist = grep  /\.[\w+,]*$mask[,\w+]*\.a~$/  , @newlist;
+		my @alist = grep  /\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.a~$/  , @newlist;
 		my $a;
 		foreach $a (@alist)
 		{
 			print "a~ is $a\n" if $verbose;
-			(my $basename = $a) =~ s/\.[\w+,]*$mask[,\w+]*\.a~$//;
+			(my $basename = $a) =~ s/\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.a~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w+[,\w+]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*[,\w[\w-]*]*\.[ade]\~$/,@newlist;
 			push (@newlist,$a);
 		}
 
-		my @dlist = grep  /\.[\w+,]*$mask[,\w+]*\.d~$/  , @newlist;
+		my @dlist = grep  /\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.d~$/  , @newlist;
 		my $d;
 		foreach $d (@dlist)
 		{
 			print "d~ is $d\n" if $verbose;
-			(my $basename = $d) =~ s/\.[\w+,]*$mask[,\w+]*\.d~$//;
+			(my $basename = $d) =~ s/\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.d~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w+[,\w+]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*[,\w[\w-]*]*\.[ade]\~$/,@newlist;
 		}
 
-		my @elist = grep  /\.[\w+,]*$mask[,\w+]*\.e~$/  , @newlist;
+		my @elist = grep  /\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.e~$/  , @newlist;
 		my $e;
 		foreach $e (@elist)
 		{
 			print "e~ is $e\n" if $verbose;
-			(my $basename = $e) =~ s/\.[\w+,]*$mask[,\w+]*\.e~$//;
+			(my $basename = $e) =~ s/\.[\w[\w-]*,]*$mask[,\w[\w-]*]*\.e~$//;
 			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w+[,\w+]*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*[,\w[\w-]*]*\.[ade]\~$/,@newlist;
 			push (@excludepatterns, $dir ."/". $basename);
 		}
 	}
 
 	# strip out any remaining control files for other previously non-matched masks.
-	@newlist = grep !/\.\w+[,\w+]*\.[ade]\~$/,@newlist;
+	@newlist = grep !/\.\w[\w-]*[,\w[\w-]*]*\.[ade]\~$/,@newlist;
 
 	@newlist = sort @newlist;
 	print "newlist is now " . (join ",",@newlist) . "\n" if $verbose;
