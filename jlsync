@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.22 2005/03/17 16:17:29 plastic Exp $
+# $Id: jlsync,v 1.23 2005/03/17 18:11:02 plastic Exp $
 
 =head1 NAME
 
@@ -379,34 +379,33 @@ foreach $client (keys %cph)
 	@{$cph{$client}->{excludepatterns}} = @excludepatterns;
 }
 
-if ( $get )
+foreach $client (keys %cph)
 {
-	&get()
-}
-else
-{
-	foreach $client (keys %cph)
+	print "exclude patterns for "  . RED . BOLD . $client . RESET.  " are:\n" . ON_CYAN . "\n"
+		. join ("\n",@{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n";
+
+	@excludepatterns = @{$cph{$client}->{excludepatterns}} ;
+
+	$excludepatternfile = "/tmp/" . ".deploy-" . $client ."-". time ."-". $$;
+
+	open(TMP,">$excludepatternfile") || die "could not open $excludepatternfile";
+	print TMP join ("\n",@excludepatterns) . "\n";
+	close TMP;
+
+	foreach $path ( @{$cph{$client}->{paths}} )
 	{
-		print "exclude patterns for "  . RED . BOLD . $client . RESET.  " are:\n" . ON_CYAN . "\n"
-			. join ("\n",@{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n";
-
-		@excludepatterns = @{$cph{$client}->{excludepatterns}} ;
-
-		$excludepatternfile = "/tmp/" . ".deploy-" . $client ."-". time ."-". $$;
-
-		open(TMP,">$excludepatternfile") || die "could not open $excludepatternfile";
-		print TMP join ("\n",@excludepatterns) . "\n";
-		close TMP;
-
-		foreach $path ( @{$cph{$client}->{paths}} )
+		if ( $get )
+		{
+			&get($client, $path)
+		}
+		else
 		{
 			&deploy($client, $path);
 		}
-
-		unlink $excludepatternfile;
 	}
-}
 
+	unlink $excludepatternfile;
+}
 
 
 foreach $client (keys %cph)
@@ -678,9 +677,15 @@ sub exclude {
 }
 
 
+#
+# &get( $client, $path)
 sub get
 {
+	my $client = $_[0];
+	my $path   = $_[1];
+
 	my $target;
+	my $cgetmask; # client get mask
 	my $stgget = $stg . "/" . $client . $path;
 	my $srcget = $src . $path;
 	my $stggettmp = $stg . "/" . $client . "-get";
@@ -689,20 +694,24 @@ sub get
         # if no getmask is supplied then $client is used.
 	if ( ! $getmask )
 	{
-		$getmask = $client;
+		$cgetmask = $client;
+	}
+	else
+	{
+		$cgetmask = $getmask;
 	}
 	
-	if ( $getmask eq "DEFAULT" )
+	if ( $cgetmask eq "DEFAULT" )
 	{
 		$target = $src . $path;
 	}
 	else
 	{
-		if ( ! grep(/^\Q$getmask\E$/, @{$maskshash{$client}}) )
+		if ( ! grep(/^\Q$cgetmask\E$/, @{$maskshash{$client}}) )
 		{
-			print BOLD.YELLOW . "WARNING client $client is currently not subscribed to mask $getmask\n". RESET;
+			print BOLD.YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n". RESET;
 		}
-		$target = $src . $path . "." . $getmask . ".a\~";
+		$target = $src . $path . "." . $cgetmask . ".a\~";
 	}
 
 	# now copy files from destination back into staging 
