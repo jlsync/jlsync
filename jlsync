@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.23 2005/03/17 18:11:02 plastic Exp $
+# $Id: jlsync,v 1.24 2005/03/18 14:15:44 plastic Exp $
 
 =head1 NAME
 
@@ -291,18 +291,11 @@ GetOptions( "real" =>\$real , 		# --real
 	    "mask=s" =>\$getmask ,	# --mask
 	);
 
-if ( $get )
-{
-	&usage unless ( ( scalar (@ARGV) == 1) && $ARGV[0] =~ m|\w[\w-]*:/|);
-}
-else
-{
 	
-	&usage unless (defined $ARGV[0]);
-	foreach my $arg (@ARGV)
-	{
-		&usage unless ($arg =~ m|\w[\w-]*:/|);
-	}
+&usage unless (defined $ARGV[0]);
+foreach my $arg (@ARGV)
+{
+	&usage unless ($arg =~ m|\w[\w-]*:/|);
 }
 
 foreach my $arg (@ARGV)
@@ -746,6 +739,10 @@ sub get
 		}
 		print "taken from repository version...\n";
 		my $confirmed;
+
+		# this code needs to be updated (does not find files in masked parent directories or files with multiple masks)
+		# best solution is to use find and look for common inode.
+		#
 		foreach $possiblesource (  ( map $srcget . "." . $_ . ".a~", reverse @{$maskshash{$client}}), $srcget) 
 		{
 			if ( -e $possiblesource )
@@ -806,6 +803,7 @@ sub get
 		system "find $stggettmp -print | wc -l";
 	}
 
+	my $yes = 0;
 	unless ( $real )
 	{
 		print "this will be copied to...\n";
@@ -816,7 +814,7 @@ sub get
 		my $answer = <STDIN>;
 		if ( $answer =~ /^y/i )
 		{
-			$real = 1;	
+			$yes = 1;
 		}
 	}
 
@@ -825,7 +823,7 @@ sub get
 
 	# TODO: need to preserve ownership & permisions of parent directories.
 
-	if ( $real )
+	if ( $real || $yes )
 	{
 		print ON_GREEN . "updating " . BLUE . $target . RESET . ON_GREEN . "... ";
 		print "rmtree($target)\n" if ($verbose);
@@ -858,6 +856,7 @@ sub spin
 
 sub nospin
 {
+	print "\b" if $spinning; # backspace over the last character
 	undef $spinning;
 	$spinpos = 0;
 }
