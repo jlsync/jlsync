@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.16 2004/10/11 17:53:06 plastic Exp $
+# $Id: jlsync,v 1.17 2004/11/17 21:49:17 plastic Exp $
 
 =head1 NAME
 
@@ -30,7 +30,7 @@ being prompted for remote client root passwords.
 =head1 OPTIONS
 
 --nocolor   turns of color text highlighting. By default 
-rsync commands and other actions are highlight in different colors. 
+rsync commands and other actions are highlighted in different colors. 
 
 --verbose   turn on more debug output.
 
@@ -39,6 +39,9 @@ default behaviour which is to push out files form the repository).
 
 --real      do not prompt for confirmation of actions. Use this 
 option with caution!
+
+--mask=template_name  when pulling files from a remote client put them into the repostitory with and add mask of template_name.    
+
 
 =head1 USAGE
 
