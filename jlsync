@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.12 2004/06/22 17:02:43 plastic Exp $
+# $Id: jlsync,v 1.13 2004/10/09 22:29:28 plastic Exp $
 
 =head1 NAME
 
@@ -15,7 +15,7 @@ client hosts
 
 =head1 SYNOPSIS
 
-    deploy [--real] [--verbose] clienthostname:/path/to/pushout
+    deploy [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout
 
     deploy --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
 
@@ -27,7 +27,20 @@ be grouped into file templates that individual client hosts can
 "subscribe" to.  Deploy works well with ssh key authentication to avoid
 being prompted for remote client root passwords.
 
-=head2 Example usage
+=head1 OPTIONS
+
+--nocolor   turns of color text highlighting. By default 
+rsync commands and other actions are highlight in different colors. 
+
+--verbose   turn on more debug output.
+
+--get 	    pull files from the remote client (instead of the 
+default behaviour which is to push out files form the repository).
+
+--real      do not prompt for confirmation of actions. Use this 
+option with caution!
+
+=head1 USAGE
 
 To distribute /usr/java from the repository to a host called jav04
 run the following commands:
@@ -191,6 +204,7 @@ use Cwd;
 use File::Find ();	  	# recent version required.
 use File::Path;
 # use File::stat;		# TODO: maybe use this later.
+use Term::ANSIColor qw(:constants);
 use File::Basename;
 use Getopt::Long;
 
@@ -224,37 +238,54 @@ my $verbose = '';
 my $real = '';  
 my $get = '';  
 my $getmask = '';  
+my $nocolor = '';  
 GetOptions( "real" =>\$real , 		# --real
 	    "get" =>\$get ,     	# --get
 	    "verbose" =>\$verbose ,     # --verbose
+	    "nocolor" =>\$nocolor ,     # --nocolor
+	    "nocolour" =>\$nocolor ,    # --nocolor
 	    "mask=s" =>\$getmask ,	# --mask
 		);
+&usage unless (defined $ARGV[0] && $ARGV[0] =~ m|\w[\w-]*:/|);
 
 my $dryrun =  $real ? "" : "--dry-run";
+$ENV{'ANSI_COLORS_DISABLED'} = 'nocolor' if ( $nocolor ) ;
 
-&usage unless (defined $ARGV[0] && $ARGV[0] =~ m|\w[\w-]*:/|);
 my ( $client, $path ) = split (":",$ARGV[0]);
 $path = "/" unless ($path); 
 $path =~ s|^|/| unless ( $path =~ m|^/| ); 
 my $excludepatternfile = "/tmp/" . ".deploy-" . $client ."-". time ."-". $$;
 
+my %maskshash;
 my @masks;
 open(MASK, $config) || die "can not open $config";
 while(<MASK>)
 {
+	next if /^#/;
 	s/\s+$//;
 	my @tmasks = split (/\s+/);
-	if ($tmasks[0] eq 'DEFAULT' && $tmasks[$#tmasks] eq $client )
+	if ($tmasks[0] eq 'DEFAULT' )
 	{
-		@masks = @tmasks;
-		last;
+		if ( defined $maskshash{$tmasks[$#tmasks]} )
+		{
+			print BOLD . RED . "Error: duplicate entires for $tmasks[$#tmasks] is file $config . exiting." . RESET . "\n";
+			exit 1;
+		}
+		else
+		{
+			$maskshash{$tmasks[$#tmasks]} = \@tmasks;
+		}
 	}
 }
 close MASK;
 
-unless ($masks[$#masks] eq $client)
+if (defined $maskshash{$client}) 
 {
-	print "$client not found in $config. exiting.\n";
+	@masks = @{$maskshash{$client}};
+}
+else
+{
+	print "$client not found in file $config. exiting.\n";
 	exit 1;
 }
 
@@ -276,9 +307,11 @@ else
 
 
 
-print "masks are " . ccode("red") . join(" ",@masks) . ccode("default") ."\n";
-
+print "masks are ".RED.BOLD.join(" ",@masks) .RESET.". building image... ";
 &buildstage($client);
+print "done.\n";
+print "excluded files are:" . ON_CYAN . "\n"
+	. join ("\n",@excludepatterns) . "\n" . RESET . "\n";
 
 if ( $get )
 {
@@ -297,7 +330,8 @@ exit 0;
 sub usage
 {
 	print "deploy usage:\n";
-	print "deploy [--real] [--verbose ] client:/path/to/sync\n";
+	print "deploy [--real] [--nocolor] [--verbose ] client:/path/to/pushout\n";
+	print "deploy --get [--mask=MASK] [--real] [--nocolor] [--verbose ] client:/path/to/pullback\n";
 	exit 1;
 }
 
@@ -312,7 +346,7 @@ sub buildstage
 	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
 
 	chdir $src;
-	print "pwd is now $src (repository area root)\n";
+	print "pwd is now $src (repository area root)\n" if $verbose;
 
 	File::Find::find({ 
 			preprocess => \&filtercontrolfiles, 
@@ -322,7 +356,6 @@ sub buildstage
 				}, "." );
 
 	s|^\.|| foreach @excludepatterns;
-	print "excluded files are:\n" . join ("\n",@excludepatterns) . "\n";
 	open(TMP,">$excludepatternfile");
 	print TMP join ("\n",@excludepatterns) . "\n";
 	close TMP;
@@ -454,7 +487,7 @@ sub getcontrolfiles {
 sub deploy
 {
 	chdir "$stg/$client";
-	print "pwd is now $stg/$client (staging area root)\n";
+	print "pwd is now $stg/$client (staging area root)\n" if $verbose;
 	unless (  $real )
 	{
 		&deploy_rsync("--dry-run");
@@ -477,8 +510,12 @@ sub deploy_rsync
 {
 	my $dryrun = $_[0];
 	my $command = "$rsync $dryrun --verbose --compress --archive --delete --recursive --links --relative --rsh=/usr/local/bin/ssh --rsync-path=/usr/local/bin/rsync --exclude-from=$excludepatternfile  .$path $client:/";
-	print "running ". &ccode("green") . $command . &ccode("default") . "\n";
+	print ($dryrun ? "running dry-run first...\n" : "running rsync for real...\n");
+	print ($dryrun ? ON_YELLOW BOLD : ON_GREEN BOLD);
+	print $command . "\n";
+	print RESET . ($dryrun ? ON_YELLOW : ON_GREEN );
 	system $command;
+	print RESET ."\n";
 }
 
 sub delete 
@@ -557,8 +594,9 @@ sub get
 
 	my $command = "$rsync --compress --archive --rsh=/usr/local/bin/ssh  --rsync-path=/usr/local/bin/rsync --exclude-from=$excludepatternfile --delete   --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
 
-	print "running " . &ccode("green") . $command . &ccode("default") ."\n";
+	print "collecting remote files...\n".BOLD.ON_YELLOW . $command ."\n". RESET . ON_YELLOW;
 	system $command;
+	print RESET . "\n";
 
 	# maybe need to add check if a directory is being replaced with a file.
 	# decide what to do, then...
@@ -567,9 +605,12 @@ sub get
 
 	if ( -e $stgget )
 	{
-		print "current image version for $client is\n$stgget\n";
+		print "current image version for $client is\n";
+		print BLUE . "$stgget\n" . RESET ;
 		chdir dirname($stgget);
+		print GREEN;
 		system "ls","-ld", basename($stgget);
+		print RESET;
 		if ( -d $stgget ) 
 		{
 			print "number of files: ";
@@ -589,9 +630,11 @@ sub get
 		if ( $same eq 'no' )
 		{
 			print "current repository version is\n";
-			print  ccode("blue") . "$target\n" . ccode("default") ;
+			print  BLUE . "$target\n" . RESET ;
 			chdir dirname($target);
+			print GREEN;
 			system "ls","-ld",basename($target);
+			print RESET;
 			if ( -d $target ) 
 			{
 				print "number of files: ";
@@ -600,9 +643,11 @@ sub get
 		}
 	}
 	
-	print "remote version just got is...\n" . ccode("blue") . "$stggettmppath\n" . ccode("default");
+	print "remote version just got is...\n" . BLUE . "$stggettmppath\n" . RESET;
 	chdir dirname($stggettmppath);
+	print GREEN;
 	system "ls","-ld",basename($stggettmppath);
+	print RESET;
 	if ( -d $stggettmppath ) 
 	{
 		print "number of files: ";
@@ -611,13 +656,13 @@ sub get
 
 	unless ( $real )
 	{
-		print ccode("blue");
+		print BLUE;
 		print "$stggettmppath\n";
-		print ccode("default");
+		print RESET;
 		print "will be copied to\n";
-		print ccode("blue");
+		print BLUE;
 		print "$target\n";
-		print ccode("default");
+		print RESET;
 		print "would your like replace files for real? [yes/No] ";
 		my $answer = <STDIN>;
 		if ( $answer =~ /^y/i )
