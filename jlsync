@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.32 2005/04/05 10:25:36 plastic Exp $
+# $Id: jlsync,v 1.33 2005/04/24 19:18:50 plastic Exp $
 
 =head1 NAME
 
@@ -18,6 +18,8 @@ client hosts
     jlsync [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout [clienthostname2:/path/to/pushout]
 
     jlsync --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
+
+    jlsync --report [--email=address] clienthostname:/path/to/check [clienthostname2:/path/to/check]
 
 =head1 DESCRIPTION
 
@@ -42,6 +44,10 @@ option with caution!
 
 --mask=template_name  when pulling files from a remote client put them
 into the repostitory with and add mask of template_name.
+
+--report	print out report of differences between client pathnames and repository taken from dry-run rsync output. 
+
+--email=address	Report is emailed to the email address "address" instead of being printed out.
 
 
 =head1 BASIC USAGE
@@ -243,6 +249,7 @@ use File::Path;
 use Term::ANSIColor qw(:constants);
 use File::Basename;
 use Getopt::Long;
+use Mail::Mailer;
 
 
 # for the convenience of &wanted calls, including -eval statements:
@@ -268,6 +275,9 @@ my $backup_dir = $jlsyncdir . "/backup";
 
 my $abletolinktosymlinks = 0 ; # linux = 1 , solaris = 0 ;
 
+my $smtpserver = '127.0.0.1';
+my $reportfrom = 'jlsync Report <root>';
+
 my @controlfiles = (); # array of control file hashes.
 
 $| = 1; # turn on autoflush
@@ -280,24 +290,27 @@ umask 0 ; # needed by subsequent mkdirs
 
 my %cph ;  # Client Path Hash
 
-my $client = '';
-my $path = '';
-my $verbose = '';  
-my $report = '';  
-my $silient = '';  
-my $reporttext = '';  
-my $real = '';  
-my $get = '';  
-my $getmask = '';  
-my $nocolor = '';  
-GetOptions( "real" =>\$real , 		# --real
-	    "get" =>\$get ,     	# --get
-	    "verbose" =>\$verbose ,     # --verbose
-	    "report" =>\$report ,       # --report
-	    "nocolor" =>\$nocolor ,     # --nocolor
-	    "nocolour" =>\$nocolor ,    # --nocolor
-	    "mask=s" =>\$getmask ,	# --mask
-	    "silient" =>\$silient ,     # --silient available on commandline for testing
+my $client;
+my $path;
+my $verbose;  
+my $report;  
+my $email;  
+my $silent;  
+my $reporttext ;  
+my $real;  
+my $get;  
+my $getmask;  
+my $nocolor;  
+my $unjlsyncronized = 0;
+
+GetOptions( "real" =>\$real , 			# --real
+	    "get" =>\$get ,     		# --get
+	    "verbose" =>\$verbose ,     	# --verbose
+	    "report" =>\$report ,       	# --report
+	    "email=s" =>\$email ,       	# --email=address
+	    "nocolor|nocolour" =>\$nocolor ,    # --nocolor
+	    "mask=s" =>\$getmask ,		# --mask=MASKNAME
+	    "silent" =>\$silent ,     # --silent available on commandline for testing
 	);
 
 	
@@ -308,12 +321,13 @@ foreach my $arg (@ARGV)
 	&usage unless ($arg =~ m|\w[\w-]*:/|);
 }
 
-if ( ( $real && $report) || ( $get && $report ) )
+
+if ( ( $real && $report) || ( $get && $report ) || ( $real && $email) || ( $get && $email ) )
 {
 	&usage;
 }
 
-$silient = 1 if $report;
+$silent = 1 if $report;
 
 foreach my $arg (@ARGV)
 {
@@ -391,7 +405,7 @@ foreach $client (keys %cph)
 
 foreach $client (keys %cph)
 {
-	print "exclude patterns for "  . RED . BOLD . $client . RESET.  " are:\n" . ON_CYAN . "\n"  . join ("\n",@{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n" unless $silient;
+	print "exclude patterns for "  . RED . BOLD . $client . RESET.  " are:\n" . ON_CYAN . "\n"  . join ("\n",@{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n" unless $silent;
 
 	@excludepatterns = @{$cph{$client}->{excludepatterns}} ;
 
@@ -425,9 +439,36 @@ foreach $client (keys %cph)
 
 if ( $report)
 {
-	print "report is as follows.....................\n";
-	print $reporttext;
-	print "..............end of report is as follows\n";
+	my $rl = <<END;
+rsync --itemize legend: UXcstpoga
+action U: <)send  >)recieve  c)change/create  h)hardlink  .)attribute chanage
+file-types X: f)file  d)directory  L)symlink  D)device
+why: c)hecksum s)ize t)imestamp p)ermissions o)wner g)roup a)extended attribute
+END
+
+	$reporttext = "jlsync report at " . localtime(time) .  "\n\n" .
+	 ( $unjlsyncronized > 0 ? $rl . "\n\n" : "" ) .
+	 $reporttext . 
+	 "\nend of report.\n";
+
+	if ( $email )
+	{
+		my $sinfo = ( $unjlsyncronized > 0 ) ? 
+			" - out of sync: " . $unjlsyncronized	
+			:
+			" - fully jlsyncronized";
+		
+		my $mailer = Mail::Mailer->new('smtp', Server => $smtpserver);
+		$mailer->open({ From => $reportfrom ,
+		To => $email ,
+		Subject => 'jlsync report at ' . localtime(time) . $sinfo } );
+		print $mailer $reporttext;
+		$mailer->close();
+	}
+	else
+	{
+		print $reporttext;
+	}
 }
 
 exit 0;
@@ -449,19 +490,19 @@ sub buildstage
 	$client = $_[0];
 	@masks = @{$maskshash{$client}}; # @masks is a global var
 
-	print "masks are ".RED.BOLD.join(" ",@{$maskshash{$client}}) .RESET.".\n" unless $silient; 
+	print "masks are ".RED.BOLD.join(" ",@{$maskshash{$client}}) .RESET.".\n" unless $silent; 
 
 	print "buildstage: client: $client  masks: " . join(',',@masks) . "\n" if $verbose;
 
-	print "deleting old image for $client in $stg/$client ... " unless $silient;
+	print "deleting old image for $client in $stg/$client ... " unless $silent;
 	system "/bin/rm -rf $stg/$client"; if ( $? !=0 ) {  die "could not /bin/rm -rf $stg/$client"; }
-	print "done.\n" unless $silient;
+	print "done.\n" unless $silent;
 
 	chdir $src;
 	print "pwd is now $src (repository area root)\n" if $verbose;
 
 	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
-	print "building new image for $client in $stg/$client ... " unless $silient;
+	print "building new image for $client in $stg/$client ... " unless $silent;
 
 	# link files to staging area
 	File::Find::find({ 
@@ -472,7 +513,7 @@ sub buildstage
 				}, "." );
 	nospin();
 
-	print "done.\n" unless $silient;
+	print "done.\n" unless $silent;
 
 	s|^\.|| foreach @excludepatterns;
 
@@ -644,7 +685,7 @@ sub deploy
 	print "pwd is now $stg/$client (staging area root)\n" if $verbose;
 	if ( $report )
 	{
-		&deploy_rsync("--dry-run",$client,$path);
+		&report_rsync($client,$path);
 	}
 	else
 	{
@@ -667,13 +708,46 @@ sub deploy
 	}
 }
 
+# maybe fold this back into deploy_rsync at some stage.
+#
+sub report_rsync
+{
+	my $client = $_[0];
+	my $path = $_[1];
+	my $output;
+
+	my $command = "$rsync $rsync_opts --dry-run --itemize-changes --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
+
+	$reporttext .= "$client:$path";
+
+	open (RSYNC, "$command|") || die 'can not open $command';
+	while (<RSYNC>)
+	{
+			$output .= $_;
+			print $_ if ($verbose);
+	}
+	close RSYNC;
+
+	if ($output)
+	{
+		$unjlsyncronized++;
+		$reporttext .= "\n\n" . $output . "\n";
+	}
+	else
+	{
+		$reporttext .= "  -  jlsyncronized\n";
+	}
+}
+
 sub deploy_rsync
 {
 	my $dryrun = $_[0];
 	my $client = $_[1];
 	my $path = $_[2];
-	my $command = "$rsync $rsync_opts $dryrun --verbose --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
-	unless ($silient)
+
+	my $command = "$rsync $rsync_opts $dryrun --itemize-changes --verbose --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
+
+	unless ($silent)
 	{
 		print ($dryrun ? "running dry-run first for ${client}:${path} ...\n" : "running rsync for real for ${client}:${path} ...\n") ;
 		print ($dryrun ? ON_YELLOW BOLD : ON_GREEN BOLD) ;
@@ -694,7 +768,7 @@ sub deploy_rsync
 		}
 	}
 	close RSYNC;
-	print RESET ."\n" unless $silient;
+	print RESET ."\n" unless $silent;
 }
 
 sub delete 
@@ -908,7 +982,7 @@ sub get
 # spin code taken from http://dreamscape.org/code/spin - slf@dreamscape.org - steven fountain
 sub spin
 {
-	return if $silient;
+	return if $silent;
 	#my @spinchars = qw(. o O o);
 	my @spinchars = qw(- / | \\);
 	$spinlen = @spinchars; # count chars to spin
@@ -922,7 +996,7 @@ sub spin
 
 sub nospin
 {
-	return if $silient;
+	return if $silent;
 	print "\b" if $spinning; # backspace over the last character
 	undef $spinning;
 	$spinpos = 0;
