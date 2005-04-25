@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.33 2005/04/24 19:18:50 plastic Exp $
+# $Id: jlsync,v 1.34 2005/04/25 16:19:02 plastic Exp $
 
 =head1 NAME
 
@@ -441,7 +441,7 @@ if ( $report)
 {
 	my $rl = <<END;
 rsync --itemize legend: UXcstpoga
-action U: <)send  >)recieve  c)change/create  h)hardlink  .)attribute chanage
+action U: <)send  >)receive  c)change/create  h)hardlink  .)attribute chanage
 file-types X: f)file  d)directory  L)symlink  D)device
 why: c)hecksum s)ize t)imestamp p)ermissions o)wner g)roup a)extended attribute
 END
