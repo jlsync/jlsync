@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.35 2005/04/29 13:58:21 plastic Exp $
+# $Id: jlsync,v 1.36 2005/05/05 11:53:19 plastic Exp $
 
 =head1 NAME
 
@@ -205,6 +205,11 @@ Multiple clients can be deployed in a single command
 with this sytle of usage the staging image for each client will be
 built first before files are deployed.
 
+Any combination of host:/path arguments can be used on the jlsync 
+command line. e.g.
+
+	jlsync db01:/u01 nfs1:/export anyhost:/any/path
+
 =head2 Advanced Control Files
 
 A control file can belong to multiple masks at once by separating the
@@ -214,6 +219,14 @@ masks with a comma "," e.g.
 and
 	/etc/motd.INTERNAL,EXTERNAL,DMZ.e~
 
+=head2 Advanced command line with multiple hosts
+
+When mutiple host:/path options are listed on the command line and the 
+/path compontents are identical the host parts can be combined by 
+using commas as a separater. e.g.
+
+	jlsync sol01,sol02,sol03,sol04,sol05,sol06,sol07:/opt/csw
+
 
 =head1 REPORT OPTION
 
@@ -222,7 +235,7 @@ to "drift" away from it's jlsync repository configuration. The --report
 option can help maintain discipline over client and jlsync repository
 changes by reporting any differences found. e.g.
 
-	jlsync --report bill:/usr/local  ben:/usr/local
+	jlsync --report bill:/usr/local ben:/usr/local
 
 will generate an onscreen report of changes between the /usr/local
 directors on clients bill and ben and the repository. Using the --email
@@ -241,11 +254,11 @@ client/repository drift.
 	friendly remote diff/cmp ?
 	pager
 	use File::Same
-	use more rysnc options. --update ?  --backup ?
+	use more rsync options. --update ?  --backup ?
 
 =head1 BUGS
 
-	--get ting a symlink
+	--get'ting a symlink
 
 =head1 SEE ALSO
 
@@ -294,7 +307,7 @@ my $backup_dir = $jlsyncdir . "/backup";
 my $abletolinktosymlinks = 0 ; # linux = 1 , solaris = 0 ;
 
 my $smtpserver = '127.0.0.1';
-my $reportfrom = 'jlsync Report <root>';
+my $reportfrom = 'jlsync report <root>';
 
 my @controlfiles = (); # array of control file hashes.
 
