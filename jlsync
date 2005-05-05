@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.37 2005/05/05 18:57:21 plastic Exp $
+# $Id: jlsync,v 1.38 2005/05/05 22:25:43 plastic Exp $
 
 =head1 NAME
 
@@ -720,7 +720,8 @@ sub deploy
 	print "pwd is now $stg/$client (staging area root)\n" if $verbose;
 	if ( $report )
 	{
-		&report_rsync($client,$path);
+		#&report_rsync($client,$path);
+		&deploy_rsync("--dry-run",$client,$path);
 	}
 	else
 	{
@@ -779,8 +780,12 @@ sub deploy_rsync
 	my $dryrun = $_[0];
 	my $client = $_[1];
 	my $path = $_[2];
+	my $output;
+	my $verbose="";
 
-	my $command = "$rsync $rsync_opts $dryrun --itemize-changes --verbose --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
+	$verbose .= " --verbose " unless ($report); 
+
+	my $command = "$rsync $rsync_opts $dryrun $verbose --itemize-changes --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
 
 	unless ($silent)
 	{
@@ -789,13 +794,19 @@ sub deploy_rsync
 		print $command . "\n" ;
 		print RESET . ($dryrun ? ON_YELLOW : ON_GREEN );
 	}
-	#system $command;
+
+	if ( $report )
+	{
+		$reporttext .= "$client:$path";
+	}
+
 	open (RSYNC, "$command|") || die 'can not open $command';
 	while (<RSYNC>)
 	{
 		if ( $report )
 		{
-			$reporttext .= $_;
+			$output .= $_;
+			print $_ if ($verbose);
 		}
 		else
 		{
@@ -804,6 +815,20 @@ sub deploy_rsync
 	}
 	close RSYNC;
 	print RESET ."\n" unless $silent;
+
+	if ($report)
+	{
+		if ($output)
+		{
+			$unjlsyncronized++;
+			$output =~ s/^/ /mg;
+			$reporttext .= "\n\n" .  $output  . "\n";
+		}
+		else
+		{
+			$reporttext .= "  -  jlsyncronized\n";
+		}
+	}
 }
 
 sub delete 
