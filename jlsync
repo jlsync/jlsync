@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.38 2005/05/05 22:25:43 plastic Exp $
+# $Id: jlsync,v 1.39 2005/05/06 17:40:59 plastic Exp $
 
 =head1 NAME
 
@@ -270,81 +270,79 @@ Jason Lee
 
 =cut
 
-
-
 use strict;
 use Cwd;
-use File::Find ();	  	# recent version required.
+use File::Find ();    # recent version required.
 use File::Path;
+
 # use File::stat;		# TODO: maybe use this later.
 use Term::ANSIColor qw(:constants);
 use File::Basename;
 use Getopt::Long;
 use Mail::Mailer;
 
-
 # for the convenience of &wanted calls, including -eval statements:
 use vars qw/*name *dir *prune $mask @excludepatterns @masks/;
-*name   = *File::Find::name;
-*dir    = *File::Find::dir;
-*prune  = *File::Find::prune;
+*name  = *File::Find::name;
+*dir   = *File::Find::dir;
+*prune = *File::Find::prune;
 
 # config file
-my $config="/jlsync/jlsync.config";
+my $config = "/jlsync/jlsync.config";
 
-# path to rsync version 2.6.0 
-my $rsync="/usr/local/bin/rsync";
+# path to rsync version 2.6.0
+my $rsync = "/usr/local/bin/rsync";
 
 # special command line options to always use with rsync
 my $rsync_opts = "--rsync-path=/usr/local/bin/rsync --rsh=/usr/local/bin/ssh";
 
 # directories without trailing /
-my $jlsyncdir = "/jlsync";
-my $src = $jlsyncdir . "/source";
-my $stg = $jlsyncdir . "/stage";
+my $jlsyncdir  = "/jlsync";
+my $src        = $jlsyncdir . "/source";
+my $stg        = $jlsyncdir . "/stage";
 my $backup_dir = $jlsyncdir . "/backup";
 
-my $abletolinktosymlinks = 0 ; # linux = 1 , solaris = 0 ;
+my $abletolinktosymlinks = 0;    # linux = 1 , solaris = 0 ;
 
 my $smtpserver = '127.0.0.1';
 my $reportfrom = 'jlsync report <root>';
 
-my @controlfiles = (); # array of control file hashes.
+my @controlfiles = ();           # array of control file hashes.
 
-$| = 1; # turn on autoflush
+$| = 1;                          # turn on autoflush
 
 my $spinpos;
 my $spinning;
 my $spinlen;
 
-umask 0 ; # needed by subsequent mkdirs
+umask 0;                         # needed by subsequent mkdirs
 
-my %cph ;  # Client Path Hash
+my %cph;                         # Client Path Hash
 
 my $client;
 my $path;
-my $verbose;  
-my $report;  
-my $email;  
-my $silent;  
-my $reporttext ;  
-my $real;  
-my $get;  
-my $getmask;  
-my $nocolor;  
+my $verbose;
+my $report;
+my $email;
+my $silent;
+my $reporttext;
+my $real;
+my $get;
+my $getmask;
+my $nocolor;
 my $unjlsyncronized = 0;
 
-GetOptions( "real" =>\$real , 			# --real
-	    "get" =>\$get ,     		# --get
-	    "verbose" =>\$verbose ,     	# --verbose
-	    "report" =>\$report ,       	# --report
-	    "email=s" =>\$email ,       	# --email=address
-	    "nocolor|nocolour" =>\$nocolor ,    # --nocolor
-	    "mask=s" =>\$getmask ,		# --mask=MASKNAME
-	    "silent" =>\$silent ,     # --silent available on commandline for testing
-	);
+GetOptions(
+	   "real"             => \$real,       # --real
+	   "get"              => \$get,        # --get
+	   "verbose"          => \$verbose,    # --verbose
+	   "report"           => \$report,     # --report
+	   "email=s"          => \$email,      # --email=address
+	   "nocolor|nocolour" => \$nocolor,    # --nocolor
+	   "mask=s"           => \$getmask,    # --mask=MASKNAME
+	   "silent"           => \$silent,     # --silent available on commandline for testing
+	  );
 
-	
 &usage unless (defined $ARGV[0]);
 
 foreach my $arg (@ARGV)
@@ -352,8 +350,7 @@ foreach my $arg (@ARGV)
 	&usage unless ($arg =~ m|\w[\w-]*:/|);
 }
 
-
-if ( ( $real && $report) || ( $get && $report ) || ( $real && $email) || ( $get && $email ) )
+if (($real && $report) || ($get && $report) || ($real && $email) || ($get && $email))
 {
 	&usage;
 }
@@ -364,31 +361,30 @@ foreach my $arg (@ARGV)
 {
 	$arg =~ m|(.+):(.+)|;
 	my $clientarg = $1;
-	my $path = $2;
-	my @clients = split(",",$1);
-	foreach my $client ( @clients )
+	my $path      = $2;
+	my @clients   = split(",", $1);
+	foreach my $client (@clients)
 	{
-		push(@{$cph{$client}->{paths}},$path);
+		push(@{$cph{$client}->{paths}}, $path);
 	}
 }
 
-
-my $dryrun =  $real ? "" : "--dry-run";
-$ENV{'ANSI_COLORS_DISABLED'} = 'nocolor' if ( $nocolor ) ;
+my $dryrun = $real ? "" : "--dry-run";
+$ENV{'ANSI_COLORS_DISABLED'} = 'nocolor' if ($nocolor);
 
 my $excludepatternfile;
 
 my %maskshash;
 my @masks;
 open(MASK, $config) || die "can not open $config";
-while(<MASK>)
+while (<MASK>)
 {
 	next if /^#/;
 	s/\s+$//;
-	my @tmasks = split (/\s+/);
-	if ($tmasks[0] eq 'DEFAULT' )
+	my @tmasks = split(/\s+/);
+	if ($tmasks[0] eq 'DEFAULT')
 	{
-		if ( defined $maskshash{$tmasks[$#tmasks]} )
+		if (defined $maskshash{$tmasks[$#tmasks]})
 		{
 			print BOLD . RED . "Error: duplicate entires for $tmasks[$#tmasks] is file $config . exiting." . RESET . "\n";
 			exit 1;
@@ -403,7 +399,7 @@ close MASK;
 
 foreach $client (keys %cph)
 {
-	unless (defined $maskshash{$client}) 
+	unless (defined $maskshash{$client})
 	{
 		print "$client not found in file $config. exiting.\n";
 		exit 1;
@@ -413,10 +409,10 @@ foreach $client (keys %cph)
 foreach $client (keys %cph)
 {
 	my $lockfile = "$stg/${client}-lock";
-	if ( -f $lockfile )
+	if (-f $lockfile)
 	{
 		print "jlsync currently locked ( $lockfile ) by process id ";
-		system "cat",$lockfile;
+		system "cat", $lockfile;
 		print "\n";
 		exit 1;
 	}
@@ -424,12 +420,10 @@ foreach $client (keys %cph)
 foreach $client (keys %cph)
 {
 	my $lockfile = "$stg/${client}-lock";
-	open(LOCK,">$lockfile") || die "could not create lockfile: $lockfile";
+	open(LOCK, ">$lockfile") || die "could not create lockfile: $lockfile";
 	print LOCK $$;
 	close LOCK;
 }
-
-
 
 foreach $client (keys %cph)
 {
@@ -440,21 +434,21 @@ foreach $client (keys %cph)
 
 foreach $client (keys %cph)
 {
-	print "exclude patterns for "  . RED . BOLD . $client . RESET.  " are:\n" . ON_CYAN . "\n"  . join ("\n",@{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n" unless $silent;
+	print "exclude patterns for " . RED . BOLD . $client . RESET . " are:\n" . ON_CYAN . "\n" . join("\n", @{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n" unless $silent;
 
-	@excludepatterns = @{$cph{$client}->{excludepatterns}} ;
+	@excludepatterns = @{$cph{$client}->{excludepatterns}};
 
-	$excludepatternfile = "/tmp/" . ".jlsync-" . $client ."-". time ."-". $$;
+	$excludepatternfile = "/tmp/" . ".jlsync-" . $client . "-" . time . "-" . $$;
 
-	open(TMP,">$excludepatternfile") || die "could not open $excludepatternfile";
-	print TMP join ("\n",@excludepatterns) . "\n";
+	open(TMP, ">$excludepatternfile") || die "could not open $excludepatternfile";
+	print TMP join("\n", @excludepatterns) . "\n";
 	close TMP;
 
-	foreach $path ( @{$cph{$client}->{paths}} )
+	foreach $path (@{$cph{$client}->{paths}})
 	{
-		if ( $get )
+		if ($get)
 		{
-			&get($client, $path)
+			&get($client, $path);
 		}
 		else
 		{
@@ -465,14 +459,13 @@ foreach $client (keys %cph)
 	unlink $excludepatternfile;
 }
 
-
 foreach $client (keys %cph)
 {
 	my $lockfile = "$stg/${client}-lock";
 	unlink $lockfile;
 }
 
-if ( $report)
+if ($report)
 {
 	my $rl = <<END;
 rsync --itemize legend: UXcstpoga
@@ -481,22 +474,23 @@ file-types X: f)file  d)directory  L)symlink  D)device
 why: c)hecksum s)ize t)imestamp p)ermissions o)wner g)roup a)extended attribute
 END
 
-	$reporttext = "jlsync report at " . localtime(time) .  "\n\n" .
-	 ( $unjlsyncronized > 0 ? $rl . "\n\n" : "" ) .
-	 $reporttext . 
-	 "\nend of report.\n";
+	$reporttext = "jlsync report at " . localtime(time) . "\n\n" . ($unjlsyncronized > 0 ? $rl . "\n\n" : "") . $reporttext . "\nend of report.\n";
 
-	if ( $email )
+	if ($email)
 	{
-		my $sinfo = ( $unjlsyncronized > 0 ) ? 
-			" - out of sync: " . $unjlsyncronized	
-			:
-			" - fully jlsyncronized";
-		
+		my $sinfo =
+		  ($unjlsyncronized > 0)
+		  ? " - out of sync: " . $unjlsyncronized
+		  : " - fully jlsyncronized";
+
 		my $mailer = Mail::Mailer->new('smtp', Server => $smtpserver);
-		$mailer->open({ From => $reportfrom ,
-		To => $email ,
-		Subject => 'jlsync report at ' . localtime(time) . $sinfo } );
+		$mailer->open(
+			      {
+			       From    => $reportfrom,
+			       To      => $email,
+			       Subject => 'jlsync report at ' . localtime(time) . $sinfo
+			      }
+			     );
 		print $mailer $reporttext;
 		$mailer->close();
 	}
@@ -510,8 +504,6 @@ exit 0;
 
 ######################################################
 
-
-
 sub usage
 {
 	print "jlsync usage:\n";
@@ -523,14 +515,15 @@ sub usage
 sub buildstage
 {
 	$client = $_[0];
-	@masks = @{$maskshash{$client}}; # @masks is a global var
+	@masks  = @{$maskshash{$client}};    # @masks is a global var
 
-	print "masks are ".RED.BOLD.join(" ",@{$maskshash{$client}}) .RESET.".\n" unless $silent; 
+	print "masks are " . RED . BOLD . join(" ", @{$maskshash{$client}}) . RESET . ".\n" unless $silent;
 
-	print "buildstage: client: $client  masks: " . join(',',@masks) . "\n" if $verbose;
+	print "buildstage: client: $client  masks: " . join(',', @masks) . "\n" if $verbose;
 
 	print "deleting old image for $client in $stg/$client ... " unless $silent;
-	system "/bin/rm -rf $stg/$client"; if ( $? !=0 ) {  die "could not /bin/rm -rf $stg/$client"; }
+	system "/bin/rm -rf $stg/$client";
+	if ($? != 0) { die "could not /bin/rm -rf $stg/$client"; }
 	print "done.\n" unless $silent;
 
 	chdir $src;
@@ -540,12 +533,15 @@ sub buildstage
 	print "building new image for $client in $stg/$client ... " unless $silent;
 
 	# link files to staging area
-	File::Find::find({ 
-			preprocess => \&filtercontrolfiles, 
-			wanted => \&hardlinkfiles, 
-			postprocess => \&setdirdate, 
-			no_chdir => 1
-				}, "." );
+	File::Find::find(
+			 {
+			  preprocess  => \&filtercontrolfiles,
+			  wanted      => \&hardlinkfiles,
+			  postprocess => \&setdirdate,
+			  no_chdir    => 1
+			 },
+			 "."
+			);
 	nospin();
 
 	print "done.\n" unless $silent;
@@ -554,128 +550,135 @@ sub buildstage
 
 }
 
-sub filtercontrolfiles {
+sub filtercontrolfiles
+{
 	my @filelist = @_;
-	my @newlist = sort @filelist ;
+	my @newlist  = sort @filelist;
 	if ($verbose)
 	{
-		print "predir is $dir\n" ;
-		print "newlist is " . (join ",",@newlist) . "\n" ;
+		print "predir is $dir\n";
+		print "newlist is " . (join ",", @newlist) . "\n";
 	}
 	else
 	{
 		spin();
-	}	
+	}
 
 	foreach $mask (reverse @masks)
 	{
-		my @alist = grep  /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.a~$/  , @newlist;
+		my @alist = grep /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.a~$/, @newlist;
 		my $a;
 		foreach $a (@alist)
 		{
 			print "a~ is $a\n" if $verbose;
 			(my $basename = $a) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.a~$//;
-			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/,@newlist;
-			push (@newlist,$a);
+			@newlist = grep !/^\Q$basename\E$/, @newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/, @newlist;
+			push(@newlist, $a);
 		}
 
-		my @dlist = grep  /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.d~$/  , @newlist;
+		my @dlist = grep /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.d~$/, @newlist;
 		my $d;
 		foreach $d (@dlist)
 		{
 			print "d~ is $d\n" if $verbose;
 			(my $basename = $d) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.d~$//;
-			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/,@newlist;
+			@newlist = grep !/^\Q$basename\E$/, @newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/, @newlist;
 		}
 
-		my @elist = grep  /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.e~$/  , @newlist;
+		my @elist = grep /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.e~$/, @newlist;
 		my $e;
 		foreach $e (@elist)
 		{
 			print "e~ is $e\n" if $verbose;
 			(my $basename = $e) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.e~$//;
-			@newlist = grep !/^\Q$basename\E$/,@newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/,@newlist;
-			push (@excludepatterns, $dir ."/". $basename);
+			@newlist = grep !/^\Q$basename\E$/, @newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/, @newlist;
+			push(@excludepatterns, $dir . "/" . $basename);
 		}
 	}
 
-        # strip out any remaining control files for other non-matched while preserving .a~ files.
-        my $f;
-        my @newnewlist = ();
-        foreach $f (@newlist)
-        {
-                if ( $f =~ /\.(\w[\w\-\,]*)\.a\~$/ )        # need to fix this to properly identifiy .MASK1,MASK2,MASK3.a~ and $1 $2 $3 etc.
-                {
-                        my @ms = split(",",$1);
+	# strip out any remaining control files for other non-matched while preserving .a~ files.
+	my $f;
+	my @newnewlist = ();
+	foreach $f (@newlist)
+	{
+		if ($f =~ /\.(\w[\w\-\,]*)\.a\~$/)    # need to fix this to properly identifiy .MASK1,MASK2,MASK3.a~ and $1 $2 $3 etc.
+		{
+			my @ms = split(",", $1);
 			foreach my $m (@ms)
 			{
-				if ( grep /^$m$/, @masks )
+				if (grep /^$m$/, @masks)
 				{
-                        		push(@newnewlist, $f);
+					push(@newnewlist, $f);
 					last;
 				}
 			}
-                }
-                elsif ( $f =~ /\.[ed]\~$/ )
-                {
-                        # must be other masks.
-                        next;
-                }
-                else
-                {
-                        push(@newnewlist, $f);
-                }
-        }
+		}
+		elsif ($f =~ /\.[ed]\~$/)
+		{
+
+			# must be other masks.
+			next;
+		}
+		else
+		{
+			push(@newnewlist, $f);
+		}
+	}
 	@newlist = sort @newnewlist;
 
-	print "newlist is now " . (join ",",@newlist) . "\n" if $verbose;
+	print "newlist is now " . (join ",", @newlist) . "\n" if $verbose;
 	return @newlist;
 }
 
-sub hardlinkfiles {
+sub hardlinkfiles
+{
 
 	(my $tname = $name) =~ s|^./||;
 	my $tbasename = $tname;
-	
-	if  ( $tbasename =~ m|(.*)\.\w[\w\-\,]*\.a\~$|  )
+
+	if ($tbasename =~ m|(.*)\.\w[\w\-\,]*\.a\~$|)
 	{
 		$tbasename = $1;
 	}
 
-	lstat $name ; # need lstat not stat to correctly identify symlinks
+	lstat $name;    # need lstat not stat to correctly identify symlinks
 
-	if ( -f _ )
+	if (-f _)
 	{
 		print "$name is a file\n" if $verbose;
-		link("$src/$tname","$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
+		link("$src/$tname", "$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
 	}
-	elsif ( -d _ ) # -d on symlink to a dir will succeed on linux/ext2fs
+	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
 	{
 		print "$name is a dir\n" if $verbose;
-		my ( $mode, $uid, $gid ) = (stat(_))[2,4,5];
-		$mode = $mode & 07777; # mask off file type
+		my ($mode, $uid, $gid) = (stat(_))[ 2, 4, 5 ];
+		$mode = $mode & 07777;    # mask off file type
 		mkdir "$stg/$client/$tname", $mode || die "unable to mkdir $stg/$client/$tname";
 		chown $uid, $gid, "$stg/$client/$tname";
 	}
-	elsif ( -l _ )
+	elsif (-l _)
 	{
-		# Need some special code here to handle copying or 
+
+		# Need some special code here to handle copying or
 		# hardlink of relative symlinks
 
 		print "$name is a symlink\n" if $verbose;
-		if ( $abletolinktosymlinks )
+		if ($abletolinktosymlinks)
 		{
-			link("$src/$tname","$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
+			link("$src/$tname", "$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
 		}
 		else
 		{
+
 			# deference symlink
 			my $target = readlink;
+
 			# create new symlink like original
-			symlink( $target , "$stg/$client/$tbasename") || die "unable to symlink $target to $stg/$client/$tbasename";
+			symlink($target, "$stg/$client/$tbasename") || die "unable to symlink $target to $stg/$client/$tbasename";
+
 			# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
 			# utime(time, (lstat($name))[9], "$stg/$client/$tbasename");
 		}
@@ -686,24 +689,26 @@ sub hardlinkfiles {
 	}
 }
 
-sub setdirdate {
+sub setdirdate
+{
 	(my $tdir = $dir) =~ s|^./||;
 	my $tbasedir = $tdir;
-	if  ( $tbasedir =~ m|(.*)\.\w[\w-]*\.a\~$|  )
+	if ($tbasedir =~ m|(.*)\.\w[\w-]*\.a\~$|)
 	{
 		$tbasedir = $1;
-		rename "$stg/$client/$tdir","$stg/$client/$tbasedir";
+		rename "$stg/$client/$tdir", "$stg/$client/$tbasedir";
 	}
 	utime(time, (stat($dir))[9], "$stg/$client/$tbasedir");
 }
 
-sub getcontrolfiles {
-	if ( $name =~ /^(.*)\.(\w[\w-]*).([dae])~\z/s )
+sub getcontrolfiles
+{
+	if ($name =~ /^(.*)\.(\w[\w-]*).([dae])~\z/s)
 	{
-		my $target = $1;
-		my $mask = $2;
+		my $target      = $1;
+		my $mask        = $2;
 		my $controltype = $3;
-		push(@controlfiles, { "name" => $name, "target" => $target, "mask" => $mask, "controltype" => $controltype } );
+		push(@controlfiles, {"name" => $name, "target" => $target, "mask" => $mask, "controltype" => $controltype});
 	}
 }
 
@@ -712,34 +717,35 @@ sub getcontrolfiles {
 sub deploy
 {
 	my $client = $_[0];
-	my $path = $_[1];
+	my $path   = $_[1];
 
 	my $yes = 0;
 	print "deploy: client: $client  path: $path\n" if $verbose;
 	chdir "$stg/$client";
 	print "pwd is now $stg/$client (staging area root)\n" if $verbose;
-	if ( $report )
+	if ($report)
 	{
+
 		#&report_rsync($client,$path);
-		&deploy_rsync("--dry-run",$client,$path);
+		&deploy_rsync("--dry-run", $client, $path);
 	}
 	else
 	{
-		unless ( $real )
+		unless ($real)
 		{
-			&deploy_rsync("--dry-run",$client,$path);
+			&deploy_rsync("--dry-run", $client, $path);
 
 			# ask question.
 			print "would your like run rsync now for real? [yes/No] ";
 			my $answer = <STDIN>;
-			if ( $answer =~ /^y/i )
+			if ($answer =~ /^y/i)
 			{
-				$yes = 1;	
+				$yes = 1;
 			}
 		}
-		if ( $real || $yes )
+		if ($real || $yes)
 		{
-			&deploy_rsync("",$client,$path);
+			&deploy_rsync("", $client, $path);
 		}
 	}
 }
@@ -749,18 +755,18 @@ sub deploy
 sub report_rsync
 {
 	my $client = $_[0];
-	my $path = $_[1];
+	my $path   = $_[1];
 	my $output;
 
 	my $command = "$rsync $rsync_opts --dry-run --itemize-changes --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
 
 	$reporttext .= "$client:$path";
 
-	open (RSYNC, "$command|") || die 'can not open $command';
+	open(RSYNC, "$command|") || die 'can not open $command';
 	while (<RSYNC>)
 	{
-			$output .= $_;
-			print $_ if ($verbose);
+		$output .= $_;
+		print $_ if ($verbose);
 	}
 	close RSYNC;
 
@@ -779,31 +785,31 @@ sub deploy_rsync
 {
 	my $dryrun = $_[0];
 	my $client = $_[1];
-	my $path = $_[2];
+	my $path   = $_[2];
 	my $output;
-	my $verbose="";
+	my $verbose = "";
 
-	$verbose .= " --verbose " unless ($report); 
+	$verbose .= " --verbose " unless ($report);
 
 	my $command = "$rsync $rsync_opts $dryrun $verbose --itemize-changes --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
 
 	unless ($silent)
 	{
-		print ($dryrun ? "running dry-run first for ${client}:${path} ...\n" : "running rsync for real for ${client}:${path} ...\n") ;
-		print ($dryrun ? ON_YELLOW BOLD : ON_GREEN BOLD) ;
-		print $command . "\n" ;
-		print RESET . ($dryrun ? ON_YELLOW : ON_GREEN );
+		print($dryrun ? "running dry-run first for ${client}:${path} ...\n" : "running rsync for real for ${client}:${path} ...\n");
+		print($dryrun ? ON_YELLOW BOLD: ON_GREEN BOLD);
+		print $command . "\n";
+		print RESET . ($dryrun ? ON_YELLOW: ON_GREEN);
 	}
 
-	if ( $report )
+	if ($report)
 	{
 		$reporttext .= "$client:$path";
 	}
 
-	open (RSYNC, "$command|") || die 'can not open $command';
+	open(RSYNC, "$command|") || die 'can not open $command';
 	while (<RSYNC>)
 	{
-		if ( $report )
+		if ($report)
 		{
 			$output .= $_;
 			print $_ if ($verbose);
@@ -814,7 +820,7 @@ sub deploy_rsync
 		}
 	}
 	close RSYNC;
-	print RESET ."\n" unless $silent;
+	print RESET . "\n" unless $silent;
 
 	if ($report)
 	{
@@ -822,7 +828,7 @@ sub deploy_rsync
 		{
 			$unjlsyncronized++;
 			$output =~ s/^/ /mg;
-			$reporttext .= "\n\n" .  $output  . "\n";
+			$reporttext .= "\n\n" . $output . "\n";
 		}
 		else
 		{
@@ -831,43 +837,44 @@ sub deploy_rsync
 	}
 }
 
-sub delete 
+sub delete
 {
 	my $name = $_[0];
-	if ( $name =~ /^(.*)\.${mask}\.d~\z/s )
+	if ($name =~ /^(.*)\.${mask}\.d~\z/s)
 	{
 		my $target = $1;
 		print "removing $target\n";
-		rmtree($target); 
+		rmtree($target);
 	}
 }
 
-sub add {
+sub add
+{
 	my $name = $_[0];
-	if ( $name =~ /^(.*)\.${mask}\.a~\z/s )
+	if ($name =~ /^(.*)\.${mask}\.a~\z/s)
 	{
 		my $target = $1;
-		if ( -e $target )
+		if (-e $target)
 		{
 			print "removing $target\n";
-			rmtree( $target ); 
+			rmtree($target);
 		}
 		print "renaming $name to $target\n";
-		rename  $name , $target;
+		rename $name, $target;
 	}
 }
 
-sub exclude {
+sub exclude
+{
 	my $name = $_[0];
-	if (  $name =~ /^(.*)\.${mask}\.e~\z/s )
+	if ($name =~ /^(.*)\.${mask}\.e~\z/s)
 	{
 		my $target = $1;
-		(my $targetpathname =  $target ) =~ s|^\.|| ;
+		(my $targetpathname = $target) =~ s|^\.||;
 		print "excluding $targetpathname\n";
-		push (@excludepatterns, $targetpathname);
+		push(@excludepatterns, $targetpathname);
 	}
 }
-
 
 #
 # &get( $client, $path)
@@ -877,14 +884,14 @@ sub get
 	my $path   = $_[1];
 
 	my $target;
-	my $cgetmask; # client get mask
-	my $stgget = $stg . "/" . $client . $path;
-	my $srcget = $src . $path;
-	my $stggettmp = $stg . "/" . $client . "-get";
-	my $stggettmppath = $stggettmp  . $path ;
+	my $cgetmask;    # client get mask
+	my $stgget        = $stg . "/" . $client . $path;
+	my $srcget        = $src . $path;
+	my $stggettmp     = $stg . "/" . $client . "-get";
+	my $stggettmppath = $stggettmp . $path;
 
-        # if no getmask is supplied then $client is used.
-	if ( ! $getmask )
+	# if no getmask is supplied then $client is used.
+	if (!$getmask)
 	{
 		$cgetmask = $client;
 	}
@@ -892,26 +899,26 @@ sub get
 	{
 		$cgetmask = $getmask;
 	}
-	
-	if ( $cgetmask eq "DEFAULT" )
+
+	if ($cgetmask eq "DEFAULT")
 	{
 		$target = $src . $path;
 	}
 	else
 	{
-		if ( ! grep(/^\Q$cgetmask\E$/, @{$maskshash{$client}}) )
+		if (!grep(/^\Q$cgetmask\E$/, @{$maskshash{$client}}))
 		{
-			print BOLD.YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n". RESET;
+			print BOLD. YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
 		}
 		$target = $src . $path . "." . $cgetmask . ".a\~";
 	}
 
-	# now copy files from destination back into staging 
+	# now copy files from destination back into staging
 	# - no could overwrite contents of hard linked files?
 
 	my $command = "$rsync $rsync_opts --compress --archive --exclude-from=$excludepatternfile --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
 
-	print "collecting remote files...\n".BOLD.ON_YELLOW . $command ."\n". RESET . ON_YELLOW;
+	print "collecting remote files...\n" . BOLD . ON_YELLOW . $command . "\n" . RESET . ON_YELLOW;
 	system $command;
 	print RESET . "\n";
 
@@ -923,15 +930,15 @@ sub get
 	my $possiblesource2;
 	my $possiblesource;
 
-	if ( -e $stgget )
+	if (-e $stgget)
 	{
 		print "current image version for $client is\n";
-		print BLUE . "$stgget\n" . RESET ;
+		print BLUE . "$stgget\n" . RESET;
 		chdir dirname($stgget);
 		print GREEN;
-		system "ls","-ld", basename($stgget);
+		system "ls", "-ld", basename($stgget);
 		print RESET;
-		if ( -d $stgget ) 
+		if (-d $stgget)
 		{
 			print "number of files: ";
 			system "find $stgget -print | wc -l";
@@ -942,13 +949,13 @@ sub get
 		# this code needs to be updated (does not find files in masked parent directories or files with multiple masks)
 		# best solution is to use find and look for common inode.
 		#
-		foreach $possiblesource (  ( map $srcget . "." . $_ . ".a~", reverse @{$maskshash{$client}}), $srcget) 
+		foreach $possiblesource ((map $srcget . "." . $_ . ".a~", reverse @{$maskshash{$client}}), $srcget)
 		{
-			if ( -e $possiblesource )
+			if (-e $possiblesource)
 			{
-				if ( -f $possiblesource )
+				if (-f $possiblesource)
 				{
-					if ( (stat($stgget))[1] == (stat($possiblesource))[1] )
+					if ((stat($stgget))[1] == (stat($possiblesource))[1])
 					{
 						$confirmed = "confirmed";
 					}
@@ -965,45 +972,45 @@ sub get
 				last;
 			}
 		}
-		print BLUE . "$possiblesource2 ($confirmed)\n" . RESET ;
+		print BLUE . "$possiblesource2 ($confirmed)\n" . RESET;
 		chdir dirname($possiblesource2);
 		print GREEN;
-		system "ls","-ld", basename($possiblesource2);
+		system "ls", "-ld", basename($possiblesource2);
 		print RESET;
-		if ( -d $possiblesource2 ) 
+		if (-d $possiblesource2)
 		{
 			print "number of files: ";
 			system "find $possiblesource2 -print | wc -l";
 		}
 	}
-	if ( -e $target  && ( $target ne $possiblesource2 ) )
+	if (-e $target && ($target ne $possiblesource2))
 	{
 		print "current repository target version is\n";
-		print  BLUE . "$target\n" . RESET ;
+		print BLUE . "$target\n" . RESET;
 		chdir dirname($target);
 		print GREEN;
-		system "ls","-ld",basename($target);
+		system "ls", "-ld", basename($target);
 		print RESET;
-		if ( -d $target ) 
+		if (-d $target)
 		{
 			print "number of files: ";
 			system "find $target -print | wc -l";
 		}
 	}
-	
+
 	print "remote version just got is...\n" . BLUE . "$stggettmppath\n" . RESET;
 	chdir dirname($stggettmppath);
 	print GREEN;
-	system "ls","-ld",basename($stggettmppath);
+	system "ls", "-ld", basename($stggettmppath);
 	print RESET;
-	if ( -d $stggettmppath ) 
+	if (-d $stggettmppath)
 	{
 		print "number of files: ";
 		system "find $stggettmp -print | wc -l";
 	}
 
 	my $yes = 0;
-	unless ( $real )
+	unless ($real)
 	{
 		print "this will be copied to...\n";
 		print BLUE;
@@ -1011,22 +1018,22 @@ sub get
 		print RESET;
 		print "would your like replace files for real? [yes/No] ";
 		my $answer = <STDIN>;
-		if ( $answer =~ /^y/i )
+		if ($answer =~ /^y/i)
 		{
 			$yes = 1;
 		}
 	}
 
-	# TODO: it would be nice to preserve control files in any 
+	# TODO: it would be nice to preserve control files in any
 	# subdirectories in the repository....
 
 	# TODO: need to preserve ownership & permisions of parent directories.
 
-	if ( $real || $yes )
+	if ($real || $yes)
 	{
 		print ON_GREEN . "updating " . BLUE . $target . RESET . ON_GREEN . "... ";
 		print "rmtree($target)\n" if ($verbose);
-		rmtree($target); 
+		rmtree($target);
 		print "mkpath" . dirname($target) . "\n" if ($verbose);
 		mkpath dirname($target), 0, 0755;
 		print "rename($stggettmppath, $target)\n" if ($verbose);
@@ -1034,33 +1041,29 @@ sub get
 		print "done." . RESET . "\n";
 	}
 
-
 }
-
-
 
 # spin code taken from http://dreamscape.org/code/spin - slf@dreamscape.org - steven fountain
 sub spin
 {
 	return if $silent;
+
 	#my @spinchars = qw(. o O o);
 	my @spinchars = qw(- / | \\);
-	$spinlen = @spinchars; # count chars to spin
-	$spinpos = 0 unless defined $spinpos; # initialize spin position
-	print "\b" if $spinning; # backspace over the last character
-	$spinning = 1 unless defined $spinning; # is this the first run?
-	print "$spinchars[$spinpos]"; # print the spin character
-	$spinpos++; # increment the spin position
-	$spinpos = 0 if ($spinpos >= $spinlen); # start over if no more chars
+	$spinlen = @spinchars;                   # count chars to spin
+	$spinpos = 0 unless defined $spinpos;    # initialize spin position
+	print "\b" if $spinning;                 # backspace over the last character
+	$spinning = 1 unless defined $spinning;  # is this the first run?
+	print "$spinchars[$spinpos]";            # print the spin character
+	$spinpos++;                              # increment the spin position
+	$spinpos = 0 if ($spinpos >= $spinlen);  # start over if no more chars
 }
 
 sub nospin
 {
-	return if $silent;
-	print "\b" if $spinning; # backspace over the last character
+	return     if $silent;
+	print "\b" if $spinning;                 # backspace over the last character
 	undef $spinning;
 	$spinpos = 0;
 }
-
-
 
