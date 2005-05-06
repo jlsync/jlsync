@@ -1,0 +1,36 @@
+
+Before you use jlsync you should be familiar with rsync. 
+You should understand exactly how powerful and how 
+dangerous rsync can be.
+
+
+Prerequisites:
+
+rsync version 2.6.4 or higher is required.
+perl version 5.8.0 or higher is required
+perl module Mail::Mailer is required
+
+2. Create directories for jlsync repository and staging areas 
+(they must be on the same filesystem). A dedicated filesystem 
+mounted at /jlsync is strongly recommended.
+
+mkdir /jlsync/source
+mkdir /jlsync/stage
+
+3. Install binaries and man page
+
+mkdir /jlsync/bin
+cp jlsync /jlsync/bin/jlsync
+mkdir -p /jlsync/man/man8
+perldoc jlsync > /jlsync/man/man8/jlsync.8
+
+3. create your own jlsync.config file
+
+mkdir /jlsync/etc
+cp jlsync.config /jlsync/etc/jlsync.config
+vi /jlsync/etc/jlsync.config
+
+4. Begin creating your repository image, either manually or by using "jlsync --get" from your clients.
+
+5. Start jlsyncing all of your systems!
+
