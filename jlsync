@@ -6,269 +6,7 @@
 #
 # Copyright © 2002-2004 Jason Lee
 #
-# $Id: jlsync,v 1.39 2005/05/06 17:40:59 plastic Exp $
-
-=head1 NAME
-
-jlsync - rsync wrapper to deploy files from a central repository to
-client hosts
-
-=head1 SYNOPSIS
-
-    jlsync [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout [clienthostname2:/another/path2/pushout]
-
-    jlsync --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
-
-    jlsync --report [--email=address] clienthostname:/path/to/check [clienthostname2:/another/path2/check]
-
-=head1 DESCRIPTION
-
-jlsync is a rsync wrapper that allows files and directories to be
-syncronised from a central repository to many client hosts. Files can
-be grouped into file templates that individual client hosts can
-"subscribe" to.  Deploy works well with ssh key authentication to avoid
-rsync over ssh being prompted for remote client root passwords.
-
-=head1 OPTIONS
-
---nocolor   turns of color text highlighting. By default 
-rsync commands and other actions are highlighted in different colors. 
-
---verbose   turn on more debug output.
-
---get       pull files from the remote client into the repository
-(instead of the default behaviour which is to push out files form the
-repository).
-
---real      do not prompt for confirmation of actions. Use this 
-option with caution!
-
---mask=template_name  when pulling files from a remote client put them
-into the repostitory with and add mask of template_name.
-
---report        print out a report of differences between client
-pathnames and staging image taken using the rsync --dry-run output.
-
---email=address	Report is emailed to the email address "address" instead of being printed out.
-
-
-=head1 BASIC USAGE
-
-To distribute /usr/java from the repository to a host called jav04
-run the following commands:
-
-First run
-
-	 jlsync jav04:/usr/java  
-
-this will build a staging image for jav04 and then do a rsync --dry-run of /usr/java to jav04. Look closely at the output to verify
-the additions and deletions on the remote host are as expected. You
-will then be prompted with "would you like run rsync now for real?
-[yes/No]". Answer yes to run rsync again without the --dry-run rysnc
-option (ie. go ahead and make changes to client for "real"). 
-
-Only if you're 100% sure that jlsync is going add and delete
-the correct files you can run with the --real option
-
-	jlsync --real jav04:/usr/java
-
-when the --real option you are not prompted and rsync to the client
-does not use the --dry-run option. BE CAREFUL, incorrect usage or
-incorrect configuration in the repository could easily result in the
-permanent deletion of important files on the client.
-
-To quickly gather files from a remote host back into the repostory the
---get option can be used. By default gathered files will be added to
-the client host template.  A specific template can be named with the
---mask option.  For example to get a freshly installed httpd binary
-back from client host web01 into the repostory for the file template
-"WEBSERVERS" run
-
-	deloy --get --mask=WEBSERVERS web01:/usr/local/apache/bin/httpd
-
-This will result in usr/local/apache/bin/httpd.WEBSERVERS.a~ being
-added to the repostitory.  Once the file is in the repository it can be
-deployed to other clients that subscribe to the WEBSERVERS template.
-
-=head2 The config file
-
-Each client host has an entry in the jlsync.config file that lists the
-file templates that it subscribes to. A template is made up of files
-and control files in the repository that share same template/mask
-name.  Using templates is a convenient way of grouping files that
-should only be deployed to a certain category of hosts such as "web
-servers" or "database servers".
-
-Every client must subscribe to the base template called DEFAULT.  Also
-each client also must subscribe to a template that is the same as that
-client's hostname.
-
-Templates filesets are layered one upon another to build the 
-jlsync client image in the
-staging area before the image is rsync'ed to the client. 
-The control files for templates are applied in reverse order as they
-are listed in the control file, ie. right to left. So when multiple
-control files with the same basename exist the most significate control
-file is used. Hostname control files are always the most significant
-and the DEFAULT control files are always the least significant.
-
-The following example jlsync.config entry shows a host, jav04, entry
-that only contains the minimum of the DEFAULT template and it's own
-template.
-
-	DEFAULT	jav04
-
-The next example jlsync.config entry shows a host, www05, who's final
-file image is made up of 3 additional file templates
-
-	DEFAULT WEBSERVERS prodservers london www05
-
-=head2 The respository 
-
-All the files for the all the file templates are stored in the
-repostitory under the same directory root. Control files for
-different templates are named with filename suffix .templatename.X~
-notation. Files in the DEFAULT template don't need the suffix notation.
-
-=head2 Control Files
-
-
-=head3 the Add .templatename.a~ controlfile
-
-Files and/or directories from the repository for a given template with
-with Add control file suffix, .i<templatename>.a~ , get added to the final
-staging image for clients that subscribe to i<templatename>.
-
-
-=head3 the Delete .templatename.d~ controlfile
-
-If file with the Delete control file suffix exists in the 
-repository then any corresponding file or directory with the same
-basename will not be added the staging image for that client.
-
-Rsync will delete files on remote hosts that aren't found in the local
-file image (that is unless they have also been excluded from the rsync
-comparision).
-
-The easiest way to create Delete and Exclude control files is to simply
-"touch" them.
-
-=head3 the Exclude .templatename.e~ controlfile
-
-Files with Exclude suffix, .templatename.e~ , are added to the list of
-files to be excluded from the rsync comparision. Any files/directories
-that are excluded will not be deployed from the staging area or
-updated/deleted from the client host.
-
-The following Exclude control file will cause the /var/run/sendmail.pid
-file to be be ignored (left alone) by the rsync for all client hosts
-
-	/var/run/sendmail.pid.DEFAULT.e~
-
-This next exclude bontrol file will cause the entire /var/mysql
-directory to be ignored for any client hosts that are listed with the
-"databaseservers" template in the jlsync.config file.
-
-	/var/mysql.databaseservers.e~
-
-Exclude control files can also contain regular expressions (as defined
-and used by rsync) to match multiple files. For example, to exclude any
-file ending in .pid in /app/sendSMS use
-
-	/app/sendSMS/*.pid.DEFAULT.e~
-
-To exclude the syslogd messages files (messages, messages.1, etc.) you
-could use
-
-	/var/log/messages*.DEFAULT.e~
-
-To exlude all files in a directory (but make sure the directory is part
-of the template) use something like
-
-	/var/mysql/*.databaseservers.e~
-
-=head1 ADVANCED USAGE
-
-Multiple files from the same client can be deployed at the same time
-	
-	jlsync jav04:/etc/passwd jav04:/etc/shadow
-
-this style of usage is useful when base directory of the files is not
-fully syncronised with the repository. It's also quicker than two
-individual invocations of jlsync as the staging image is only built
-once.
-
-Multiple clients can be deployed in a single command
-
-	jlsync jav03:/opt/apache jav04:/opt/apache
-
-with this sytle of usage the staging image for each client will be
-built first before files are deployed.
-
-Any combination of host:/path arguments can be used on the jlsync 
-command line. e.g.
-
-	jlsync db01:/u01 nfs1:/export anyhost:/any/path
-
-=head2 Advanced Control Files
-
-A control file can belong to multiple masks at once by separating the
-masks with a comma "," e.g.
-
-	/opt/apache.www3,www4.a~
-and
-	/etc/motd.INTERNAL,EXTERNAL,DMZ.e~
-
-=head2 Advanced command line with multiple hosts
-
-When mutiple host:/path options are listed on the command line and the 
-/path compontents are identical the host parts can be combined by 
-using commas as a separater. e.g.
-
-	jlsync sol01,sol02,sol03,sol04,sol05,sol06,sol07:/opt/csw
-
-
-=head1 REPORT OPTION
-
-Ad-hoc filesystem changes made on a client can cause it's configuration
-to "drift" away from it's jlsync repository configuration. The --report
-option can help maintain discipline over client and jlsync repository
-changes by reporting any differences found. e.g.
-
-	jlsync --report bill:/usr/local ben:/usr/local
-
-will generate an onscreen report of changes between the /usr/local
-directors on clients bill and ben and the repository. Using the --email
-option will cause the report to be sent via email e.g.
-
-	jlsync --report --email=admin@company.com mailhub:/etc/mail
-
-Scheduling jlsync reports in cron can be a useful way to keep an eye on
-client/repository drift.
-
-
-=head1 TODO
-
-	pre and post exec command control files?
-	log files?
-	friendly remote diff/cmp ?
-	pager
-	use File::Same
-	use more rsync options. --update ?  --backup ?
-
-=head1 BUGS
-
-	--get'ting a symlink
-
-=head1 SEE ALSO
-
-the rsync(1) man page.
-
-=head1 AUTHOR
-
-Jason Lee
-
-=cut
+# $Id: jlsync,v 1.40 2005/05/07 10:31:19 plastic Exp $
 
 use strict;
 use Cwd;
@@ -1066,4 +804,287 @@ sub nospin
 	undef $spinning;
 	$spinpos = 0;
 }
+
+
+
+
+###################### MANPAGE ########################################
+
+
+=head1 NAME
+
+jlsync - rsync wrapper to deploy files from a central repository to
+client hosts
+
+=head1 SYNOPSIS
+
+    jlsync [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout [clienthostname2:/another/path2/pushout]
+
+    jlsync --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
+
+    jlsync --report [--email=address] clienthostname:/path/to/check [clienthostname2:/another/path2/check]
+
+=head1 DESCRIPTION
+
+jlsync is a rsync wrapper that allows files and directories to be
+syncronised from a central repository to many client hosts. Files can
+be grouped into file templates that individual client hosts can
+"subscribe" to.  Deploy works well with ssh key authentication to avoid
+rsync over ssh being prompted for remote client root passwords.
+
+=head1 OPTIONS
+
+--nocolor   turns of color text highlighting. By default 
+rsync commands and other actions are highlighted in different colors. 
+
+--verbose   turn on more debug output.
+
+--get       pull files from the remote client into the repository
+(instead of the default behaviour which is to push out files form the
+repository).
+
+--real      do not prompt for confirmation of actions. Use this 
+option with caution!
+
+--mask=template_name  when pulling files from a remote client put them
+into the repostitory with and add mask of template_name.
+
+--report        print out a report of differences between client
+pathnames and staging image taken using the rsync --dry-run output.
+
+--email=address	Report is emailed to the email address "address" instead of being printed out.
+
+
+=head1 BASIC USAGE
+
+To distribute /usr/java from the repository to a host called jav04
+run the following commands:
+
+First run
+
+	 jlsync jav04:/usr/java  
+
+this will build a staging image for jav04 and then do a rsync --dry-run of /usr/java to jav04. Look closely at the output to verify
+the additions and deletions on the remote host are as expected. You
+will then be prompted with "would you like run rsync now for real?
+[yes/No]". Answer yes to run rsync again without the --dry-run rysnc
+option (ie. go ahead and make changes to client for "real"). 
+
+Only if you're 100% sure that jlsync is going add and delete
+the correct files you can run with the --real option
+
+	jlsync --real jav04:/usr/java
+
+when the --real option you are not prompted and rsync to the client
+does not use the --dry-run option. BE CAREFUL, incorrect usage or
+incorrect configuration in the repository could easily result in the
+permanent deletion of important files on the client.
+
+=head2 Getting remote files into the repository
+
+To quickly gather files and/or directories from a remote host back 
+into the repostory the --get option can be used. 
+A specific template for the gathered files can be named with the
+--mask option.  For example to get a freshly installed httpd binary
+back from client host web01 into the repostory for the file template
+"WEBSERVERS" run
+
+	jlsync --get --mask=WEBSERVERS web01:/usr/local/apache/bin/httpd
+
+This will result in usr/local/apache/bin/httpd.WEBSERVERS.a~ being
+added to the repostitory.  Once the file is in the repository it can be
+deployed to other clients that subscribe to the WEBSERVERS template.
+
+Files can be gathered into the special DEFAULT file template
+
+	jlsync --get --mask=DEFAULT  holly:/usr/local/bin/rsync
+
+will result in usr/local/bin/rsync being added to the repostitory.
+
+When a --mask option is not given gathered files will be added to
+the clients own host template.  e.g.
+
+	jlsync --get goanna:/etc/hosts
+
+would result in etc/hosts.goanna.a~ being added to the repository. 
+
+=head2 The config file
+
+Each client host has an entry in the jlsync.config file that lists the
+file templates that it subscribes to. A template is made up of files
+and control files in the repository that share same template/mask
+name.  Using templates is a convenient way of grouping files that
+should only be deployed to a certain category of hosts such as "web
+servers" or "database servers".
+
+Every client must subscribe to the base template called DEFAULT.  Also
+each client also must subscribe to a template that is the same as that
+client's hostname.
+
+Templates filesets are layered one upon another to build the 
+jlsync client image in the
+staging area before the image is rsync'ed to the client. 
+The control files for templates are applied in reverse order as they
+are listed in the control file, ie. right to left. So when multiple
+control files with the same basename exist the most significate control
+file is used. Hostname control files are always the most significant
+and the DEFAULT control files are always the least significant.
+
+The following example jlsync.config entry shows a host, jav04, entry
+that only contains the minimum of the DEFAULT template and it's own
+template.
+
+	DEFAULT	jav04
+
+The next example jlsync.config entry shows a host, www05, who's final
+file image is made up of 3 additional file templates
+
+	DEFAULT WEBSERVERS prodservers london www05
+
+=head2 The respository 
+
+All the files for the all the file templates are stored in the
+repostitory under the same directory root. Control files for
+different templates are named with filename suffix .templatename.X~
+notation. Files in the DEFAULT template don't need the suffix notation.
+
+=head2 Control Files
+
+
+=head3 the Add .templatename.a~ controlfile
+
+Files and/or directories from the repository for a given template with
+with Add control file suffix, .i<templatename>.a~ , get added to the final
+staging image for clients that subscribe to i<templatename>.
+
+
+=head3 the Delete .templatename.d~ controlfile
+
+If file with the Delete control file suffix exists in the 
+repository then any corresponding file or directory with the same
+basename will not be added the staging image for that client.
+
+Rsync will delete files on remote hosts that aren't found in the local
+file image (that is unless they have also been excluded from the rsync
+comparision).
+
+The easiest way to create Delete and Exclude control files is to simply
+"touch" them.
+
+=head3 the Exclude .templatename.e~ controlfile
+
+Files with Exclude suffix, .templatename.e~ , are added to the list of
+files to be excluded from the rsync comparision. Any files/directories
+that are excluded will not be deployed from the staging area or
+updated/deleted from the client host.
+
+The following Exclude control file will cause the /var/run/sendmail.pid
+file to be be ignored (left alone) by the rsync for all client hosts
+
+	/var/run/sendmail.pid.DEFAULT.e~
+
+This next exclude bontrol file will cause the entire /var/mysql
+directory to be ignored for any client hosts that are listed with the
+"databaseservers" template in the jlsync.config file.
+
+	/var/mysql.databaseservers.e~
+
+Exclude control files can also contain regular expressions (as defined
+and used by rsync) to match multiple files. For example, to exclude any
+file ending in .pid in /app/sendSMS use
+
+	/app/sendSMS/*.pid.DEFAULT.e~
+
+To exclude the syslogd messages files (messages, messages.1, etc.) you
+could use
+
+	/var/log/messages*.DEFAULT.e~
+
+To exlude all files in a directory (but make sure the directory is part
+of the template) use something like
+
+	/var/mysql/*.databaseservers.e~
+
+=head1 ADVANCED USAGE
+
+Multiple files from the same client can be deployed at the same time
+	
+	jlsync jav04:/etc/passwd jav04:/etc/shadow
+
+this style of usage is useful when base directory of the files is not
+fully syncronised with the repository. It's also quicker than two
+individual invocations of jlsync as the staging image is only built
+once.
+
+Multiple clients can be deployed in a single command
+
+	jlsync jav03:/opt/apache jav04:/opt/apache
+
+with this sytle of usage the staging image for each client will be
+built first before files are deployed.
+
+Any combination of host:/path arguments can be used on the jlsync 
+command line. e.g.
+
+	jlsync db01:/u01 nfs1:/export anyhost:/any/path
+
+=head2 Advanced Control Files
+
+A control file can belong to multiple masks at once by separating the
+masks with a comma "," e.g.
+
+	/opt/apache.www3,www4.a~
+and
+	/etc/motd.INTERNAL,EXTERNAL,DMZ.e~
+
+=head2 Advanced command line with multiple hosts
+
+When mutiple host:/path options are listed on the command line and the 
+/path compontents are identical the host parts can be combined by 
+using commas as a separater. e.g.
+
+	jlsync sol01,sol02,sol03,sol04,sol05,sol06,sol07:/opt/csw
+
+
+=head1 REPORT OPTION
+
+Ad-hoc filesystem changes made on a client can cause it's configuration
+to "drift" away from it's jlsync repository configuration. The --report
+option can help maintain discipline over client and jlsync repository
+changes by reporting any differences found. e.g.
+
+	jlsync --report bill:/usr/local ben:/usr/local
+
+will generate an onscreen report of changes between the /usr/local
+directors on clients bill and ben and the repository. Using the --email
+option will cause the report to be sent via email e.g.
+
+	jlsync --report --email=admin@company.com mailhub:/etc/mail
+
+Scheduling jlsync reports in cron can be a useful way to keep an eye on
+client/repository drift.
+
+
+=head1 TODO
+
+	pre and post exec command control files?
+	log files?
+	friendly remote diff/cmp ?
+	pager
+	use File::Same
+	use more rsync options. --update ?  --backup ?
+
+=head1 BUGS
+
+	--get'ting a symlink
+
+=head1 SEE ALSO
+
+the rsync(1) man page.
+
+=head1 AUTHOR
+
+Jason Lee
+
+=cut
 
