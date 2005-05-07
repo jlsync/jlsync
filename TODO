@@ -1,12 +1,14 @@
 
-deploy with custom masks on the command line.
+- jlsync with custom masks on the command line.
 
-multiple files/directories from the command line
-
-bug: exclude file in control file subdirectory...
+- bug: exclude file in control file subdirectory...
    /usr/local/bb/bbc1.9e-btf.SOLX86.a~/*
 
-feature: mutliple MASKS in one exension, aaaaa.WEB,DATABASE.a~
 
-
+- pre and post exec command control files?
+- log files?
+- friendly remote diff/cmp ?
+- pager
+- use File::Same
+- use more rsync options. --update ?  --backup ?
 
