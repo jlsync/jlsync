@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.41 2005/05/07 10:57:42 plastic Exp $
+# $Id: jlsync,v 1.42 2005/05/07 13:43:39 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -546,9 +546,9 @@ sub deploy_rsync
 	unless ($silent)
 	{
 		print($dryrun ? "running dry-run first for ${client}:${path} ...\n" : "running rsync for real for ${client}:${path} ...\n");
-		print($dryrun ? ON_YELLOW BOLD: ON_GREEN BOLD);
+		print($dryrun ? BLACK ON_YELLOW BOLD: ON_GREEN BOLD);
 		print $command . "\n";
-		print RESET . ($dryrun ? ON_YELLOW: ON_GREEN);
+		print RESET . ($dryrun ? BLACK ON_YELLOW: ON_GREEN);
 	}
 
 	if ($report)
@@ -658,7 +658,7 @@ sub get
 	{
 		if (!grep(/^\Q$cgetmask\E$/, @{$maskshash{$client}}))
 		{
-			print BOLD. YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
+			print BOLD . YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
 		}
 		$target = $src . $path . "." . $cgetmask . ".a\~";
 	}
@@ -668,7 +668,7 @@ sub get
 
 	my $command = "$rsync $rsync_opts --compress --archive --exclude-from=$excludepatternfile --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
 
-	print "collecting remote files...\n" . BOLD . ON_YELLOW . $command . "\n" . RESET . ON_YELLOW;
+	print "collecting remote files...\n" . BOLD . BLACK . ON_YELLOW . $command . "\n" . RESET . BLACK . ON_YELLOW;
 	system $command;
 	print RESET . "\n";
 
@@ -1079,16 +1079,12 @@ client/repository drift.
 
 =head1 TODO
 
-	pre and post exec command control files?
-	log files?
-	friendly remote diff/cmp ?
-	pager
-	use File::Same
-	use more rsync options. --update ?  --backup ?
+lots.
 
 =head1 BUGS
 
-	--get'ting a symlink
+many.
+--get'ting a symlink
 
 =head1 SEE ALSO
 
