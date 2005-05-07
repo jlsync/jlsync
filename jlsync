@@ -4,9 +4,38 @@
 #
 # Jason Lee, jlsync@jason-lee.net.au, March 2002
 #
-# Copyright © 2002-2004 Jason Lee
+# Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.40 2005/05/07 10:31:19 plastic Exp $
+# $Id: jlsync,v 1.41 2005/05/07 10:57:42 plastic Exp $
+
+
+#################### BEGIN CONFIGURATION SECTION ###########################
+
+# path to rsync version 2.6.4 (or greater)
+my $rsync = "/usr/local/bin/rsync";
+
+# special command line options to always use with rsync
+my $rsync_opts = "--rsync-path=/usr/local/bin/rsync --rsh=/usr/local/bin/ssh";
+
+# directories variables are without trailing /
+# leave $jlsyncdir set to "/jlsync" for easy upgrades
+my $jlsyncdir  = "/jlsync";
+
+# $src, $stg and $backup_dir must be on the same filesystem
+my $src        = $jlsyncdir . "/source";
+my $stg        = $jlsyncdir . "/stage";
+my $backup_dir = $jlsyncdir . "/backup";
+
+# jlsync config file
+my $config     = $jlsyncdir . "/etc/jlsync.config";
+
+# $smtpserver is used by Mail::Mailer to send --email reports through
+my $smtpserver = '127.0.0.1';
+
+# no all filesystems are created equal. leave this set to 0
+my $abletolinktosymlinks = 0;    # linux = 1 , solaris = 0 ;
+
+#################### END OF CONFIGURATION SECTION ###########################
 
 use strict;
 use Cwd;
@@ -25,24 +54,6 @@ use vars qw/*name *dir *prune $mask @excludepatterns @masks/;
 *dir   = *File::Find::dir;
 *prune = *File::Find::prune;
 
-# config file
-my $config = "/jlsync/jlsync.config";
-
-# path to rsync version 2.6.0
-my $rsync = "/usr/local/bin/rsync";
-
-# special command line options to always use with rsync
-my $rsync_opts = "--rsync-path=/usr/local/bin/rsync --rsh=/usr/local/bin/ssh";
-
-# directories without trailing /
-my $jlsyncdir  = "/jlsync";
-my $src        = $jlsyncdir . "/source";
-my $stg        = $jlsyncdir . "/stage";
-my $backup_dir = $jlsyncdir . "/backup";
-
-my $abletolinktosymlinks = 0;    # linux = 1 , solaris = 0 ;
-
-my $smtpserver = '127.0.0.1';
 my $reportfrom = 'jlsync report <root>';
 
 my @controlfiles = ();           # array of control file hashes.
@@ -212,7 +223,8 @@ file-types X: f)file  d)directory  L)symlink  D)device
 why: c)hecksum s)ize t)imestamp p)ermissions o)wner g)roup a)extended attribute
 END
 
-	$reporttext = "jlsync report at " . localtime(time) . "\n\n" . ($unjlsyncronized > 0 ? $rl . "\n\n" : "") . $reporttext . "\nend of report.\n";
+	my $runtime = time - $^T;
+	$reporttext = "jlsync report at " . localtime(time) . "\n\n" . ($unjlsyncronized > 0 ? $rl . "\n\n" : "") . $reporttext . "\nEnd of report. Completed in " . $runtime . " seconds.\n";
 
 	if ($email)
 	{
