@@ -4,7 +4,7 @@ You should understand exactly how powerful and how
 dangerous rsync can be.
 
 
-Prerequisites:
+1. Prerequisites:
 
 rsync version 2.6.4 or higher is required.
 perl version 5.8.0 or higher is required
@@ -17,20 +17,29 @@ mounted at /jlsync is strongly recommended.
 mkdir /jlsync/source
 mkdir /jlsync/stage
 
-3. Install binaries and man page
+3. Install binaries 
 
 mkdir /jlsync/bin
 cp jlsync /jlsync/bin/jlsync
+
+4. Configure jlsync for your site, edit variables in CONFIGURATION SECTION
+
+vi /jlsync/bin/jlsync
+
+5. Install man page
+
 mkdir -p /jlsync/man/man8
 perldoc jlsync > /jlsync/man/man8/jlsync.8
 
-3. create your own jlsync.config file
+6. Create your own jlsync.config file
 
 mkdir /jlsync/etc
 cp jlsync.config /jlsync/etc/jlsync.config
 vi /jlsync/etc/jlsync.config
 
-4. Begin creating your repository image, either manually or by using "jlsync --get" from your clients.
+7. Install the rsync command on your clients in the correct location.
 
-5. Start jlsyncing all of your systems!
+8. Begin creating your repository image, either manually or by using "jlsync --get" from your clients.
+
+9. Start jlsyncing all of your systems!
 
