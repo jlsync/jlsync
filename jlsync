@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.42 2005/05/07 13:43:39 plastic Exp $
+# $Id: jlsync,v 1.43 2005/05/11 15:43:33 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -683,7 +683,7 @@ sub get
 	if (-e $stgget)
 	{
 		print "current image version for $client is\n";
-		print BLUE . "$stgget\n" . RESET;
+		print ON_WHITE . BLUE . "$stgget" . RESET . "\n";
 		chdir dirname($stgget);
 		print GREEN;
 		system "ls", "-ld", basename($stgget);
@@ -722,7 +722,7 @@ sub get
 				last;
 			}
 		}
-		print BLUE . "$possiblesource2 ($confirmed)\n" . RESET;
+		print ON_WHITE .  BLUE . "$possiblesource2 ($confirmed)" . RESET . "\n";
 		chdir dirname($possiblesource2);
 		print GREEN;
 		system "ls", "-ld", basename($possiblesource2);
@@ -736,7 +736,7 @@ sub get
 	if (-e $target && ($target ne $possiblesource2))
 	{
 		print "current repository target version is\n";
-		print BLUE . "$target\n" . RESET;
+		print ON_WHITE . BLUE . "$target" . RESET . "\n";
 		chdir dirname($target);
 		print GREEN;
 		system "ls", "-ld", basename($target);
@@ -748,7 +748,7 @@ sub get
 		}
 	}
 
-	print "remote version just got is...\n" . BLUE . "$stggettmppath\n" . RESET;
+	print "remote version just got is...\n" . ON_WHITE . BLUE . "$stggettmppath" . RESET . "\n";
 	chdir dirname($stggettmppath);
 	print GREEN;
 	system "ls", "-ld", basename($stggettmppath);
@@ -763,9 +763,7 @@ sub get
 	unless ($real)
 	{
 		print "this will be copied to...\n";
-		print BLUE;
-		print "$target\n";
-		print RESET;
+		print ON_WHITE . BLUE . $target . RESET . "\n";
 		print "would your like replace files for real? [yes/No] ";
 		my $answer = <STDIN>;
 		if ($answer =~ /^y/i)
@@ -781,7 +779,7 @@ sub get
 
 	if ($real || $yes)
 	{
-		print ON_GREEN . "updating " . BLUE . $target . RESET . ON_GREEN . "... ";
+		print ON_GREEN . "updating " . ON_WHITE . BLUE . $target . RESET . ON_GREEN . "... ";
 		print "rmtree($target)\n" if ($verbose);
 		rmtree($target);
 		print "mkpath" . dirname($target) . "\n" if ($verbose);
