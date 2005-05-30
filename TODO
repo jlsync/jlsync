@@ -1,10 +1,10 @@
 
 - jlsync with custom masks on the command line.
 
-- bug: exclude file in control file subdirectory...
-   /usr/local/bb/bbc1.9e-btf.SOLX86.a~/*
+- clean up exclude file list mananagement code
 
-
+- --report option with bb/hobbit functionality?
+- --version command line option.
 - pre and post exec command control files?
 - log files?
 - friendly remote diff/cmp ?
