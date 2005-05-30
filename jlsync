@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.43 2005/05/11 15:43:33 plastic Exp $
+# $Id: jlsync,v 1.44 2005/05/30 20:36:16 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -18,7 +18,7 @@ my $rsync = "/usr/local/bin/rsync";
 my $rsync_opts = "--rsync-path=/usr/local/bin/rsync --rsh=/usr/local/bin/ssh";
 
 # directories variables are without trailing /
-# leave $jlsyncdir set to "/jlsync" for easy upgrades
+# leave $jlsyncdir set to "/jlsync" for compatibility with furture upgrades
 my $jlsyncdir  = "/jlsync";
 
 # $src, $stg and $backup_dir must be on the same filesystem
@@ -32,7 +32,7 @@ my $config     = $jlsyncdir . "/etc/jlsync.config";
 # $smtpserver is used by Mail::Mailer to send --email reports through
 my $smtpserver = '127.0.0.1';
 
-# no all filesystems are created equal. leave this set to 0
+# not all filesystems are created equal. leave this set to 0
 my $abletolinktosymlinks = 0;    # linux = 1 , solaris = 0 ;
 
 #################### END OF CONFIGURATION SECTION ###########################
@@ -49,10 +49,9 @@ use Getopt::Long;
 use Mail::Mailer;
 
 # for the convenience of &wanted calls, including -eval statements:
-use vars qw/*name *dir *prune $mask @excludepatterns @masks/;
+use vars qw/*name *dir  $mask @excludepatterns @masks/;
 *name  = *File::Find::name;
 *dir   = *File::Find::dir;
-*prune = *File::Find::prune;
 
 my $reportfrom = 'jlsync report <root>';
 
@@ -96,7 +95,7 @@ GetOptions(
 
 foreach my $arg (@ARGV)
 {
-	&usage unless ($arg =~ m|\w[\w-]*:/|);
+	&usage unless ($arg =~ m|\w[\w\-]*:/|);
 }
 
 if (($real && $report) || ($get && $report) || ($real && $email) || ($get && $email))
@@ -316,40 +315,41 @@ sub filtercontrolfiles
 
 	foreach $mask (reverse @masks)
 	{
-		my @alist = grep /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.a~$/, @newlist;
+		my @alist = grep /\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$/, @newlist;
 		my $a;
 		foreach $a (@alist)
 		{
 			print "a~ is $a\n" if $verbose;
-			(my $basename = $a) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.a~$//;
+			(my $basename = $a) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/, @newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
 			push(@newlist, $a);
 		}
 
-		my @dlist = grep /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.d~$/, @newlist;
+		my @dlist = grep /\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$/, @newlist;
 		my $d;
 		foreach $d (@dlist)
 		{
 			print "d~ is $d\n" if $verbose;
-			(my $basename = $d) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.d~$//;
+			(my $basename = $d) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/, @newlist;
+			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/, @newlist;
 		}
 
-		my @elist = grep /\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.e~$/, @newlist;
+		my @elist = grep /\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$/, @newlist;
 		my $e;
 		foreach $e (@elist)
 		{
 			print "e~ is $e\n" if $verbose;
-			(my $basename = $e) =~ s/\.(\w[\w-]*,)*$mask(,\w[\w-]*)*\.e~$//;
+			(my $basename = $e) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
-			@newlist = grep !/^\Q$basename\E\.\w[\w-]*(,\w[\w-]*)*\.[ade]\~$/, @newlist;
-			push(@excludepatterns, $dir . "/" . $basename);
+			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
+			my $targetdir = join ("/" ,  (map  { $_ =~ s/\.\w[\w\-,]*\.a~$/$1/ ; $_ }   split("/",$dir) )  );
+			push(@excludepatterns, $targetdir . "/" . $basename);
 		}
 	}
 
-	# strip out any remaining control files for other non-matched while preserving .a~ files.
+	# strip out any remaining control files for other non-matched masks while preserving .a~ files.
 	my $f;
 	my @newnewlist = ();
 	foreach $f (@newlist)
@@ -386,12 +386,13 @@ sub filtercontrolfiles
 sub hardlinkfiles
 {
 
-	(my $tname = $name) =~ s|^./||;
-	my $tbasename = $tname;
+	my $srcname = $name;
+	$srcname =~ s|^./||;
+	my $stgname = $srcname;
 
-	if ($tbasename =~ m|(.*)\.\w[\w\-\,]*\.a\~$|)
+	if ($stgname =~ m|(.*)\.\w[\w\-\,]*\.a\~$|)
 	{
-		$tbasename = $1;
+		$stgname = $1;
 	}
 
 	lstat $name;    # need lstat not stat to correctly identify symlinks
@@ -399,15 +400,16 @@ sub hardlinkfiles
 	if (-f _)
 	{
 		print "$name is a file\n" if $verbose;
-		link("$src/$tname", "$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
+		link("$src/$srcname", "$stg/$client/$stgname") || die "unable to link $src/$srcname to $stg/$client/$stgname";
 	}
 	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
 	{
 		print "$name is a dir\n" if $verbose;
 		my ($mode, $uid, $gid) = (stat(_))[ 2, 4, 5 ];
 		$mode = $mode & 07777;    # mask off file type
-		mkdir "$stg/$client/$tname", $mode || die "unable to mkdir $stg/$client/$tname";
-		chown $uid, $gid, "$stg/$client/$tname";
+		# directory name is set to stgname by setdirdate function after all files and subdirectories have been processed.
+		mkdir "$stg/$client/$srcname", $mode || die "unable to mkdir $stg/$client/$srcname";
+		chown $uid, $gid, "$stg/$client/$srcname";
 	}
 	elsif (-l _)
 	{
@@ -418,7 +420,7 @@ sub hardlinkfiles
 		print "$name is a symlink\n" if $verbose;
 		if ($abletolinktosymlinks)
 		{
-			link("$src/$tname", "$stg/$client/$tbasename") || die "unable to link $src/$tname to $stg/$client/$tbasename";
+			link("$src/$srcname", "$stg/$client/$stgname") || die "unable to link $src/$srcname to $stg/$client/$stgname";
 		}
 		else
 		{
@@ -427,10 +429,10 @@ sub hardlinkfiles
 			my $target = readlink;
 
 			# create new symlink like original
-			symlink($target, "$stg/$client/$tbasename") || die "unable to symlink $target to $stg/$client/$tbasename";
+			symlink($target, "$stg/$client/$stgname") || die "unable to symlink $target to $stg/$client/$stgname";
 
 			# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
-			# utime(time, (lstat($name))[9], "$stg/$client/$tbasename");
+			# utime(time, (lstat($name))[9], "$stg/$client/$stgname");
 		}
 	}
 	else
@@ -443,7 +445,7 @@ sub setdirdate
 {
 	(my $tdir = $dir) =~ s|^./||;
 	my $tbasedir = $tdir;
-	if ($tbasedir =~ m|(.*)\.\w[\w-]*\.a\~$|)
+	if ($tbasedir =~ m|(.*)\.\w[\w\-]*\.a\~$|)
 	{
 		$tbasedir = $1;
 		rename "$stg/$client/$tdir", "$stg/$client/$tbasedir";
@@ -453,7 +455,7 @@ sub setdirdate
 
 sub getcontrolfiles
 {
-	if ($name =~ /^(.*)\.(\w[\w-]*).([dae])~\z/s)
+	if ($name =~ /^(.*)\.(\w[\w\-]*).([dae])~\z/s)
 	{
 		my $target      = $1;
 		my $mask        = $2;
