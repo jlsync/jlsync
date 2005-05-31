@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.44 2005/05/30 20:36:16 plastic Exp $
+# $Id: jlsync,v 1.45 2005/05/31 12:17:24 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -344,7 +344,10 @@ sub filtercontrolfiles
 			(my $basename = $e) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
-			my $targetdir = join ("/" ,  (map  { $_ =~ s/\.\w[\w\-,]*\.a~$/$1/ ; $_ }   split("/",$dir) )  );
+			#my $targetdir = join ("/" ,  (map  { $_ =~ s/\.\w[\w\-,]*\.a~$/$1/ ; $_ }   split("/",$dir) )  );
+			my $targetdir = $dir;
+			$targetdir =~ s|\.\w[\w\-,]*\.a~/|/|;
+			$targetdir =~ s|\.\w[\w\-,]*\.a~$||;
 			push(@excludepatterns, $targetdir . "/" . $basename);
 		}
 	}
