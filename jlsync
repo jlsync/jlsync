@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.45 2005/05/31 12:17:24 plastic Exp $
+# $Id: jlsync,v 1.46 2005/06/03 17:16:21 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -676,6 +676,56 @@ sub get
 	print "collecting remote files...\n" . BOLD . BLACK . ON_YELLOW . $command . "\n" . RESET . BLACK . ON_YELLOW;
 	system $command;
 	print RESET . "\n";
+
+
+	# full path search to determine repository original version...
+
+	my $ap = '';  # accumulated path 
+	my $pc;  # path component
+	my @pcs =  split "/", $path ;
+	shift @pcs ; # strip leading null before /(root directory.
+
+	PATHLOOP: foreach $pc ( @pcs )
+	{
+		my $tap = $ap . '/' . $pc;
+
+		#
+		# need special code to check for basename.mask1,mask2.a~ files.... grr.
+		#
+
+		foreach my $tmask ( reverse @{$maskshash{$client}} )
+		{
+			if ( -e "${src}/${tap}.${tmask}.a~" )		# todo? could explicity check for directories up until last pc
+			{
+				# this is the path to remember
+				$ap = $tap . ".${tmask}.a~";
+				next PATHLOOP;
+
+			}
+			elsif ( -e "${src}/${tap}.${tmask}.d~" )
+			{
+				# warning/error target is current masked by ~d 
+
+
+			}
+			elsif ( -e "${src}/${tap}.${tmask}.e~" )
+			{
+				# warning/error target is current masked by ~e ( rsync get probably won't work )
+
+
+			}
+		}
+
+		# else DEFAULT files without any mask
+		if ( -e "${src}/${tap}" )
+		{
+			# this is the path to remember
+			$ap = $tap;
+		}
+	}
+
+	print "Accumlated path is $ap\n";
+	
 
 	# maybe need to add check if a directory is being replaced with a file.
 	# decide what to do, then...
