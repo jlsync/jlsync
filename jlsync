@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.46 2005/06/03 17:16:21 plastic Exp $
+# $Id: jlsync,v 1.47 2005/06/08 17:51:59 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -89,7 +89,7 @@ GetOptions(
 	   "nocolor|nocolour" => \$nocolor,    # --nocolor
 	   "mask=s"           => \$getmask,    # --mask=MASKNAME
 	   "silent"           => \$silent,     # --silent available on commandline for testing
-	  );
+	  ) || &usage ;
 
 &usage unless (defined $ARGV[0]);
 
@@ -692,6 +692,41 @@ sub get
 		#
 		# need special code to check for basename.mask1,mask2.a~ files.... grr.
 		#
+		
+		my %cfh; # control file hash
+		opendir(AP,$ap);
+		my $nextfile;
+		while (defined ($nextfile = readdir(AP)))
+		{
+			next if $nextfile !~ /^{$pc}/;
+			if ( $nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/ )
+			{
+				my @masks = split(",",$1);
+				my $type = $3;
+				
+				foreach my $mask (@masks)
+				{
+					if ( ! defined($cfh{$type}{$mask}) )
+					{
+						$cfh{$type}{$mask} = $nextfile;
+					}
+					else
+					{
+						print "ERROR duplicate control file with same mask at $cfh{$type}{$mask} AND $nextfile \n";
+						exit 0;
+
+					}
+
+				}
+			}
+
+		}
+		closedir(AP);
+
+		#foreach my $cf $cfh....
+
+		
+
 
 		foreach my $tmask ( reverse @{$maskshash{$client}} )
 		{
