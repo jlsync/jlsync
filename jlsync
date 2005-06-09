@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.47 2005/06/08 17:51:59 plastic Exp $
+# $Id: jlsync,v 1.48 2005/06/09 17:47:42 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -685,20 +685,21 @@ sub get
 	my @pcs =  split "/", $path ;
 	shift @pcs ; # strip leading null before /(root directory.
 
+	print "pcs is " . join("/",@pcs) . "\n";
+
 	PATHLOOP: foreach $pc ( @pcs )
 	{
 		my $tap = $ap . '/' . $pc;
 
-		#
-		# need special code to check for basename.mask1,mask2.a~ files.... grr.
-		#
+		# special code to check for basename.mask1,mask2.a~ files. grr.
 		
 		my %cfh; # control file hash
-		opendir(AP,$ap);
+		opendir(AP,$src . "/" . $ap) || die "could not open $ap \! \n";
 		my $nextfile;
 		while (defined ($nextfile = readdir(AP)))
 		{
-			next if $nextfile !~ /^{$pc}/;
+			next if $nextfile !~ /^$pc/;
+			print "\n nextfile is $nextfile\n";
 			if ( $nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/ )
 			{
 				my @masks = split(",",$1);
@@ -706,9 +707,10 @@ sub get
 				
 				foreach my $mask (@masks)
 				{
-					if ( ! defined($cfh{$type}{$mask}) )
+					if ( ! defined($cfh{$mask}{$type}) )
 					{
-						$cfh{$type}{$mask} = $nextfile;
+						print "mask $mask type $type file $nextfile\n";
+						$cfh{$mask}{$type} = $nextfile;
 					}
 					else
 					{
@@ -716,14 +718,20 @@ sub get
 						exit 0;
 
 					}
-
 				}
 			}
-
 		}
 		closedir(AP);
 
-		#foreach my $cf $cfh....
+		foreach my $mft (sort keys %cfh)
+		{
+			print "mask $mft ";
+			foreach my $tft ( keys %{$cfh{$mft}} )
+			{
+				print "type $tft ";
+				print "file $cfh{$mft}{$tft}\n";
+			}
+		}
 
 		
 
