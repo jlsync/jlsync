@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.48 2005/06/09 17:47:42 plastic Exp $
+# $Id: jlsync,v 1.49 2005/06/20 18:12:46 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -663,7 +663,7 @@ sub get
 	{
 		if (!grep(/^\Q$cgetmask\E$/, @{$maskshash{$client}}))
 		{
-			print BOLD . YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
+			print BOLD . BLACK . ON_YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
 		}
 		$target = $src . $path . "." . $cgetmask . ".a\~";
 	}
@@ -738,23 +738,23 @@ sub get
 
 		foreach my $tmask ( reverse @{$maskshash{$client}} )
 		{
-			if ( -e "${src}/${tap}.${tmask}.a~" )		# todo? could explicity check for directories up until last pc
+			if ( -e "${src}/${tap}.${tmask}.a~" )	
 			{
 				# this is the path to remember
 				$ap = $tap . ".${tmask}.a~";
 				next PATHLOOP;
-
 			}
 			elsif ( -e "${src}/${tap}.${tmask}.d~" )
 			{
 				# warning/error target is current masked by ~d 
-
+				print  YELLOW . ON_WHITE . "WARNING: --get target pathname is masked by control file ${src}/${tap}.${tmask}.d~" . RESET . "\n";
 
 			}
 			elsif ( -e "${src}/${tap}.${tmask}.e~" )
 			{
 				# warning/error target is current masked by ~e ( rsync get probably won't work )
-
+				print  YELLOW . ON_WHITE . "WARNING: --get target pathname is masked by control file ${src}/${tap}.${tmask}.e~" .  "\n".
+						"WARNING: rsync probably won't work" . RESET . "\n";
 
 			}
 		}
