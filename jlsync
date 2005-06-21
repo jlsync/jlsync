@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.49 2005/06/20 18:12:46 plastic Exp $
+# $Id: jlsync,v 1.50 2005/06/21 18:37:30 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -674,8 +674,14 @@ sub get
 	my $command = "$rsync $rsync_opts --compress --archive --exclude-from=$excludepatternfile --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
 
 	print "collecting remote files...\n" . BOLD . BLACK . ON_YELLOW . $command . "\n" . RESET . BLACK . ON_YELLOW;
-	system $command;
+	system $command; # todo check return code
 	print RESET . "\n";
+
+	if ( ! -e  $stggettmppath )
+	{
+		print BOLD . RED . ON_WHITE . "Error: nothing collected from $client:$path \nplease check that remote path contains no symlinks" . RESET . "\n";
+		return;
+	}
 
 
 	# full path search to determine repository original version...
