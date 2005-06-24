@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.50 2005/06/21 18:37:30 plastic Exp $
+# $Id: jlsync,v 1.51 2005/06/24 11:15:05 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -691,7 +691,7 @@ sub get
 	my @pcs =  split "/", $path ;
 	shift @pcs ; # strip leading null before /(root directory.
 
-	print "pcs is " . join("/",@pcs) . "\n";
+	my $found = 'yes';
 
 	PATHLOOP: foreach $pc ( @pcs )
 	{
@@ -705,7 +705,7 @@ sub get
 		while (defined ($nextfile = readdir(AP)))
 		{
 			next if $nextfile !~ /^$pc/;
-			print "\n nextfile is $nextfile\n";
+			print "\nnextfile is $nextfile\n" if $verbose;
 			if ( $nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/ )
 			{
 				my @masks = split(",",$1);
@@ -715,7 +715,7 @@ sub get
 				{
 					if ( ! defined($cfh{$mask}{$type}) )
 					{
-						print "mask $mask type $type file $nextfile\n";
+						print "mask $mask type $type file $nextfile\n" if $verbose;
 						$cfh{$mask}{$type} = $nextfile;
 					}
 					else
@@ -729,18 +729,26 @@ sub get
 		}
 		closedir(AP);
 
-		foreach my $mft (sort keys %cfh)
-		{
-			print "mask $mft ";
-			foreach my $tft ( keys %{$cfh{$mft}} )
-			{
-				print "type $tft ";
-				print "file $cfh{$mft}{$tft}\n";
-			}
-		}
+		#foreach my $mft (sort keys %cfh)
+		#{
+		#	print "mask $mft ";
+		#	foreach my $tft ( keys %{$cfh{$mft}} )
+		#	{
+		#		print "type $tft ";
+		#		print "file $cfh{$mft}{$tft}\n";
+		#	}
+		#}
 
 		
-
+		##
+		## BUG. all these -e tests below fail on symlinks when 
+		## the symlink target does not exist on the jlsync 
+		## repository machine 
+		## symlinks can be the last path component 
+		## the last path component 
+		##
+		##
+		
 
 		foreach my $tmask ( reverse @{$maskshash{$client}} )
 		{
@@ -771,9 +779,18 @@ sub get
 			# this is the path to remember
 			$ap = $tap;
 		}
+		else
+		{
+			# path not found in repository.
+			$found = 'no';
+			last PATHLOOP;
+		}
 	}
 
-	print "Accumlated path is $ap\n";
+	print "Accumlated path is $ap\n" if $verbose;
+	print "Was the target path found in the source repository?: $found\n" if $verbose;
+
+	my $srcap = $src . $ap;
 	
 
 	# maybe need to add check if a directory is being replaced with a file.
@@ -784,9 +801,38 @@ sub get
 	my $possiblesource2;
 	my $possiblesource;
 
+	if ( $found eq 'yes' )
+	{
+		print "current source repository version...\n"; 
+		my $confirmed = '';
+
+		if ( -f $srcap )
+		{
+			if ((stat($stgget))[1] == (stat("$srcap"))[1])
+			{
+				$confirmed = "(confirmed)";
+			}
+			else
+			{
+				$confirmed = "(warning: source and stage inode mismatch)";
+			}
+		}
+		print ON_WHITE .  BLUE . "$srcap $confirmed" . RESET . "\n";
+		chdir dirname($srcap);
+		print GREEN;
+		system "ls", "-ld", basename($srcap);
+		print RESET;
+		if (-d $srcap)
+		{
+			print "number of files: ";
+			system "find $srcap -print | wc -l";
+		}
+	}
+
+
 	if (-e $stgget)
 	{
-		print "current image version for $client is\n";
+		print "current stage area version for $client is\n";
 		print ON_WHITE . BLUE . "$stgget" . RESET . "\n";
 		chdir dirname($stgget);
 		print GREEN;
@@ -797,47 +843,9 @@ sub get
 			print "number of files: ";
 			system "find $stgget -print | wc -l";
 		}
-		print "taken from repository version...\n";
-		my $confirmed;
-
-		# this code needs to be updated (does not find files in masked parent directories or files with multiple masks)
-		# best solution is to use find and look for common inode.
-		#
-		foreach $possiblesource ((map $srcget . "." . $_ . ".a~", reverse @{$maskshash{$client}}), $srcget)
-		{
-			if (-e $possiblesource)
-			{
-				if (-f $possiblesource)
-				{
-					if ((stat($stgget))[1] == (stat($possiblesource))[1])
-					{
-						$confirmed = "confirmed";
-					}
-					else
-					{
-						$confirmed = "warning: inter-directory control file conflict exists";
-					}
-				}
-				else
-				{
-					$confirmed = "not confirmed";
-				}
-				$possiblesource2 = $possiblesource;
-				last;
-			}
-		}
-		print ON_WHITE .  BLUE . "$possiblesource2 ($confirmed)" . RESET . "\n";
-		chdir dirname($possiblesource2);
-		print GREEN;
-		system "ls", "-ld", basename($possiblesource2);
-		print RESET;
-		if (-d $possiblesource2)
-		{
-			print "number of files: ";
-			system "find $possiblesource2 -print | wc -l";
-		}
 	}
-	if (-e $target && ($target ne $possiblesource2))
+
+	if (-e $target && ($target ne $srcap ))
 	{
 		print "current repository target version is\n";
 		print ON_WHITE . BLUE . "$target" . RESET . "\n";
