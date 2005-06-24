@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.51 2005/06/24 11:15:05 plastic Exp $
+# $Id: jlsync,v 1.52 2005/06/24 14:00:26 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -49,7 +49,9 @@ use Getopt::Long;
 use Mail::Mailer;
 
 # for the convenience of &wanted calls, including -eval statements:
-use vars qw/*name *dir  $mask @excludepatterns @masks/;
+#use vars qw/*name *dir  $mask @excludepatterns @masks/;
+use vars qw/*name *dir/;
+our ( $mask, @excludepatterns, @masks, $nsrc, $dest);
 *name  = *File::Find::name;
 *dir   = *File::Find::dir;
 
@@ -123,7 +125,6 @@ $ENV{'ANSI_COLORS_DISABLED'} = 'nocolor' if ($nocolor);
 my $excludepatternfile;
 
 my %maskshash;
-my @masks;
 open(MASK, $config) || die "can not open $config";
 while (<MASK>)
 {
@@ -263,23 +264,35 @@ sub usage
 
 sub buildstage
 {
-	$client = $_[0];
+	my $client = $_[0];
 	@masks  = @{$maskshash{$client}};    # @masks is a global var
 
-	print "masks are " . RED . BOLD . join(" ", @{$maskshash{$client}}) . RESET . ".\n" unless $silent;
-
-	print "buildstage: client: $client  masks: " . join(',', @masks) . "\n" if $verbose;
+	print "masks are " . RED . BOLD . join(" ", @masks) . RESET . ".\n" unless $silent;
 
 	print "deleting old image for $client in $stg/$client ... " unless $silent;
 	system "/bin/rm -rf $stg/$client";
 	if ($? != 0) { die "could not /bin/rm -rf $stg/$client"; }
 	print "done.\n" unless $silent;
-
-	chdir $src;
-	print "pwd is now $src (repository area root)\n" if $verbose;
-
 	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
+
 	print "building new image for $client in $stg/$client ... " unless $silent;
+	&buildstage2($client, $src, "$stg/$client" );
+
+	print "done.\n" unless $silent;
+}
+
+#
+# buildstage2(client name, source repository root directory, stage directory)
+#
+sub buildstage2
+{
+	our $client = $_[0];
+	our $nsrc   = $_[1]; # new src
+	our $dest   = $_[2];
+
+	chdir $nsrc;
+	print "pwd is now $nsrc (repository area root)\n" if $verbose;
+
 
 	# link files to staging area
 	File::Find::find(
@@ -291,9 +304,7 @@ sub buildstage
 			 },
 			 "."
 			);
-	nospin();
-
-	print "done.\n" unless $silent;
+	nospin() unless $silent;
 
 	s|^\.|| foreach @excludepatterns;
 
@@ -371,7 +382,6 @@ sub filtercontrolfiles
 		}
 		elsif ($f =~ /\.[ed]\~$/)
 		{
-
 			# must be other masks.
 			next;
 		}
@@ -403,7 +413,7 @@ sub hardlinkfiles
 	if (-f _)
 	{
 		print "$name is a file\n" if $verbose;
-		link("$src/$srcname", "$stg/$client/$stgname") || die "unable to link $src/$srcname to $stg/$client/$stgname";
+		link("$nsrc/$srcname", "$dest/$stgname") || die "unable to link $nsrc/$srcname to $dest/$stgname";
 	}
 	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
 	{
@@ -411,8 +421,8 @@ sub hardlinkfiles
 		my ($mode, $uid, $gid) = (stat(_))[ 2, 4, 5 ];
 		$mode = $mode & 07777;    # mask off file type
 		# directory name is set to stgname by setdirdate function after all files and subdirectories have been processed.
-		mkdir "$stg/$client/$srcname", $mode || die "unable to mkdir $stg/$client/$srcname";
-		chown $uid, $gid, "$stg/$client/$srcname";
+		mkdir "$dest/$srcname", $mode || die "unable to mkdir $dest/$srcname";
+		chown $uid, $gid, "$dest/$srcname";
 	}
 	elsif (-l _)
 	{
@@ -423,19 +433,18 @@ sub hardlinkfiles
 		print "$name is a symlink\n" if $verbose;
 		if ($abletolinktosymlinks)
 		{
-			link("$src/$srcname", "$stg/$client/$stgname") || die "unable to link $src/$srcname to $stg/$client/$stgname";
+			link("$nsrc/$srcname", "$dest/$stgname") || die "unable to link $nsrc/$srcname to $dest/$stgname";
 		}
 		else
 		{
-
 			# deference symlink
 			my $target = readlink;
 
 			# create new symlink like original
-			symlink($target, "$stg/$client/$stgname") || die "unable to symlink $target to $stg/$client/$stgname";
+			symlink($target, "$dest/$stgname") || die "unable to symlink $target to $dest/$stgname";
 
 			# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
-			# utime(time, (lstat($name))[9], "$stg/$client/$stgname");
+			# utime(time, (lstat($name))[9], "$dest/$stgname");
 		}
 	}
 	else
@@ -451,9 +460,9 @@ sub setdirdate
 	if ($tbasedir =~ m|(.*)\.\w[\w\-]*\.a\~$|)
 	{
 		$tbasedir = $1;
-		rename "$stg/$client/$tdir", "$stg/$client/$tbasedir";
+		rename "$dest/$tdir", "$dest/$tbasedir";
 	}
-	utime(time, (stat($dir))[9], "$stg/$client/$tbasedir");
+	utime(time, (stat($dir))[9], "$dest/$tbasedir");
 }
 
 sub getcontrolfiles
@@ -480,7 +489,6 @@ sub deploy
 	print "pwd is now $stg/$client (staging area root)\n" if $verbose;
 	if ($report)
 	{
-
 		#&report_rsync($client,$path);
 		&deploy_rsync("--dry-run", $client, $path);
 	}
