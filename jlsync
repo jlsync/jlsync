@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.52 2005/06/24 14:00:26 plastic Exp $
+# $Id: jlsync,v 1.53 2005/06/27 19:35:12 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -254,6 +254,56 @@ exit 0;
 
 ######################################################
 
+sub readsource
+{
+	our $nsrc   = $_[0]; # new src
+
+	print "reading source repository image in... " unless $silent;
+	chdir $nsrc;
+	print "pwd is now $nsrc (repository area root)\n" if $verbose;
+
+
+	# link files to staging area
+	File::Find::find(
+			 {
+			  # preprocess  => 
+			  wanted      => \&addtods,
+			  #
+			  no_chdir    => 1
+			 },
+			 "."
+			);
+	nospin() unless $silent;
+
+	print "done.\n" unless $silent;
+}
+
+# addtods - add to data structure
+sub addtods
+{
+	my $srcname = $name;
+	$srcname =~ s|^./||;
+
+	my @stat = lstat $name;    # need lstat not stat to correctly identify symlinks
+
+	if (-f _)
+	{
+		print "$name is a file\n" if $verbose;
+	}
+	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
+	{
+		print "$name is a dir\n" if $verbose;
+	}
+	elsif (-l _)
+	{
+		print "$name is a symlink\n" if $verbose;
+	}
+	else
+	{
+		print "not a file, symlink or directory: $name\n";
+	}
+}
+
 sub usage
 {
 	print "jlsync usage:\n";
@@ -277,6 +327,7 @@ sub buildstage
 
 	print "building new image for $client in $stg/$client ... " unless $silent;
 	&buildstage2($client, $src, "$stg/$client" );
+	#$path???? &rbuildstage2($client, $path, $src, "$stg/$client" );
 
 	print "done.\n" unless $silent;
 }
@@ -308,6 +359,90 @@ sub buildstage2
 
 	s|^\.|| foreach @excludepatterns;
 
+}
+
+#
+# rbuildstage2(client, path, source repository root directory, stage directory)
+#
+sub rbuildstage2
+{
+	my $client = $_[0];
+	my $path   = $_[1]; # new src
+	my $nsrc   = $_[2]; # new src
+	my $dest   = $_[3];
+
+	chdir $nsrc;
+	print "pwd is now $nsrc (repository area root)\n" if $verbose;
+
+	my $pc;  # path component
+	$path =~ s|^/|| ; 
+	$path =~ s|/$|| ; 
+	my @pcs =  split "/", $path ;
+	$pc = shift @pcs ; 
+
+	#filter controlfile code...
+
+	# hardlink files code...
+
+	lstat $name;    # need lstat not stat to correctly identify symlinks
+
+	if (-f _)
+	{
+		print "$name is a file\n" if $verbose;
+		link("$nsrc/$pc", "$dest/$pc") || die "unable to link $nsrc/$pc to $dest/$pc";
+	}
+	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
+	{
+		print "$name is a dir\n" if $verbose;
+		my ($mode, $uid, $gid) = (stat(_))[ 2, 4, 5 ];
+		$mode = $mode & 07777;    # mask off file type
+		# directory name is set to stgname by setdirdate function after all files and subdirectories have been processed.
+		mkdir "$dest/$pc", $mode || die "unable to mkdir $dest/$pc";
+		chown $uid, $gid, "$dest/$pc";
+	}
+	elsif (-l _)
+	{
+
+		# Need some special code here to handle copying or
+		# hardlink of relative symlinks
+
+		print "$name is a symlink\n" if $verbose;
+		if ($abletolinktosymlinks)
+		{
+			link("$nsrc/$pc", "$dest/$pc") || die "unable to link $nsrc/$pc to $dest/$pc";
+		}
+		else
+		{
+			# deference symlink
+			my $target = readlink;
+
+			# create new symlink like original
+			symlink($target, "$dest/$pc") || die "unable to symlink $target to $dest/$pc";
+
+			# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
+			# utime(time, (lstat($name))[9], "$dest/$pc");
+		}
+	}
+	else
+	{
+		print "not a file, symlink or directory: $name\n";
+	}
+	
+	my @exclusionlist = &rbuildstage2($client,$path,$nsrc,$dest);
+
+	# set dirdate code...
+	{
+		(my $tdir = $dir) =~ s|^./||;
+		my $tbasedir = $tdir;
+		if ($tbasedir =~ m|(.*)\.\w[\w\-]*\.a\~$|)
+		{
+			$tbasedir = $1;
+			rename "$dest/$tdir", "$dest/$tbasedir";
+		}
+		utime(time, (stat($dir))[9], "$dest/$tbasedir");
+	}
+
+	s|^\.|| foreach @excludepatterns;
 }
 
 sub filtercontrolfiles
