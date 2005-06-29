@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.53 2005/06/27 19:35:12 plastic Exp $
+# $Id: jlsync,v 1.54 2005/06/29 17:16:57 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -174,6 +174,12 @@ foreach $client (keys %cph)
 	close LOCK;
 }
 
+print "reading source repository image in... " unless $silent;
+my %srch = &srcdir($src);
+nospin() unless $silent;
+print "done.\n" unless $silent;
+exit 0;
+
 foreach $client (keys %cph)
 {
 	@excludepatterns = ();
@@ -254,7 +260,70 @@ exit 0;
 
 ######################################################
 
-sub readsource
+# datastructure
+# directory hash { fileone => filehash,  filetwo => filehash }
+# filehash { lstat => (normal lstat array), 
+#	     type => "f" or "d" or "l",
+#	     dir => dirhash ,
+#            link => "link/target" ,
+#  ????      control => { 
+#                         a => { maska => filehash, maskb => filehas, ... }
+#                         d => { maska => filehash, maskb => filehas, ... }
+#                         e => { maska => filehash, maskb => filehas, ... }
+#                        }
+#            }
+
+sub srcdir
+{
+	my $dir = $_[0];
+	my %dirh;
+	local *DIR;
+
+	#opendir(DIR,$src . "/" . $ap) || die "could not open $ap \! \n";
+	opendir(DIR,$dir) || die "could not open $dir \! \n";
+	my $nextfile;
+	while (defined ($nextfile = readdir(DIR)))
+	{
+		next if $nextfile =~ /^\.\.?$/;
+		$dirh{$nextfile} = { &srcfile($dir . "/" . $nextfile ) };
+	}
+	close(DIR);
+	spin() unless $silent;
+	return %dirh;
+}
+
+sub srcfile
+{
+	my $filename = $_[0];
+	my %fileh;
+
+	$fileh{lstat}  =   [ lstat $filename ];
+
+	if (-f _)
+	{
+		print "$filename is a file\n" if $verbose;
+		$fileh{type} =  'f';
+	}
+	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
+	{
+		print "$filename is a dir\n" if $verbose;
+		$fileh{type} =  'd';
+		$fileh{dir} =  { &srcdir($filename) };
+	}
+	elsif (-l _)
+	{
+		print "$filename is a symlink\n" if $verbose;
+		$fileh{type} =  'l';
+		$fileh{link} = readlink($filename);
+	}
+	else
+	{
+		print "not a file, symlink or directory: $filename\n";
+	}
+	return %fileh;
+}
+
+sub readsrc
 {
 	our $nsrc   = $_[0]; # new src
 
@@ -266,10 +335,8 @@ sub readsource
 	# link files to staging area
 	File::Find::find(
 			 {
-			  # preprocess  => 
 			  wanted      => \&addtods,
 			  #
-			  no_chdir    => 1
 			 },
 			 "."
 			);
@@ -284,24 +351,29 @@ sub addtods
 	my $srcname = $name;
 	$srcname =~ s|^./||;
 
-	my @stat = lstat $name;    # need lstat not stat to correctly identify symlinks
+	# need lstat not stat to correctly identify symlinks
+	@{$srch{$srcname}{lstat}} =  lstat $name;
 
 	if (-f _)
 	{
+		@{$srch{$srcname}{type}} =  'f';
 		print "$name is a file\n" if $verbose;
 	}
 	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
 	{
+		@{$srch{$srcname}{type}} =  'd';
 		print "$name is a dir\n" if $verbose;
 	}
 	elsif (-l _)
 	{
+		@{$srch{$srcname}{type}} =  'l';
 		print "$name is a symlink\n" if $verbose;
 	}
 	else
 	{
 		print "not a file, symlink or directory: $name\n";
 	}
+	spin() unless $silent;
 }
 
 sub usage
