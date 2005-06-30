@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.55 2005/06/30 11:16:27 plastic Exp $
+# $Id: jlsync,v 1.56 2005/06/30 18:36:07 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -115,7 +115,7 @@ foreach my $arg (@ARGV)
 	my @clients   = split(",", $1);
 	foreach my $client (@clients)
 	{
-		push(@{$cph{$client}->{paths}}, $path);
+		$cph{$client}{$path} = [ () ]  ;
 	}
 }
 
@@ -166,6 +166,7 @@ foreach $client (keys %cph)
 		exit 1;
 	}
 }
+
 foreach $client (keys %cph)
 {
 	my $lockfile = "$stg/${client}-lock";
@@ -178,29 +179,34 @@ print "reading source repository image in... " unless $silent;
 my %srch = &srcdir($src);
 nospin() unless $silent;
 print "done.\n" unless $silent;
-exit 0;
 
 foreach $client (keys %cph)
 {
-	@excludepatterns = ();
-	&buildstage($client);
-	@{$cph{$client}->{excludepatterns}} = @excludepatterns;
+	&buildstageclient($client);
 }
 
+#foreach $client (keys %cph)
+#{
+#	@excludepatterns = ();
+#	&buildstage($client);
+#	@{$cph{$client}->{excludepatterns}} = @excludepatterns;
+#}
+
 foreach $client (keys %cph)
 {
-	print "exclude patterns for " . RED . BOLD . $client . RESET . " are:\n" . ON_CYAN . "\n" . join("\n", @{$cph{$client}->{excludepatterns}}) . "\n" . RESET . "\n" unless $silent;
-
-	@excludepatterns = @{$cph{$client}->{excludepatterns}};
-
-	$excludepatternfile = "/tmp/" . ".jlsync-" . $client . "-" . time . "-" . $$;
-
-	open(TMP, ">$excludepatternfile") || die "could not open $excludepatternfile";
-	print TMP join("\n", @excludepatterns) . "\n";
-	close TMP;
-
-	foreach $path (@{$cph{$client}->{paths}})
+	foreach $path ( %{ $cph{$client} } )
 	{
+
+		print "exclude patterns for " . RED . BOLD . $client . ":" . $path . RESET . " are:\n" . ON_CYAN . "\n" . join("\n", @{$cph{$client}{$path}}) . "\n" . RESET . "\n" unless $silent;
+
+		my @excludepatterns = [ $cph{$client}{$path} ];
+
+		$excludepatternfile = "/tmp/" . ".jlsync-" . $client . "-" . time . "-" . $$;
+
+		open(TMP, ">$excludepatternfile") || die "could not open $excludepatternfile";
+		print TMP join("\n", @excludepatterns) . "\n";
+		close TMP;
+
 		if ($get)
 		{
 			&get($client, $path);
@@ -209,9 +215,9 @@ foreach $client (keys %cph)
 		{
 			&deploy($client, $path);
 		}
-	}
 
-	unlink $excludepatternfile;
+		unlink $excludepatternfile;
+	}
 }
 
 foreach $client (keys %cph)
@@ -297,6 +303,7 @@ sub srcfile
 	my $filename = $_[0];
 	my %fileh;
 
+	$fileh{fullpath}  =  $filename;
 	$fileh{lstat}  =   [ lstat $filename ];
 
 	if (-f _)
@@ -314,7 +321,7 @@ sub srcfile
 	{
 		print "$filename is a symlink\n" if $verbose;
 		$fileh{type} =  'l';
-		$fileh{link} = readlink($filename);
+		$fileh{readlink} = readlink($filename);
 	}
 	else
 	{
@@ -323,58 +330,6 @@ sub srcfile
 	return %fileh;
 }
 
-sub readsrc
-{
-	our $nsrc   = $_[0]; # new src
-
-	print "reading source repository image in... " unless $silent;
-	chdir $nsrc;
-	print "pwd is now $nsrc (repository area root)\n" if $verbose;
-
-
-	# link files to staging area
-	File::Find::find(
-			 {
-			  wanted      => \&addtods,
-			  #
-			 },
-			 "."
-			);
-	nospin() unless $silent;
-
-	print "done.\n" unless $silent;
-}
-
-# addtods - add to data structure
-sub addtods
-{
-	my $srcname = $name;
-	$srcname =~ s|^./||;
-
-	# need lstat not stat to correctly identify symlinks
-	@{$srch{$srcname}{lstat}} =  lstat $name;
-
-	if (-f _)
-	{
-		@{$srch{$srcname}{type}} =  'f';
-		print "$name is a file\n" if $verbose;
-	}
-	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
-	{
-		@{$srch{$srcname}{type}} =  'd';
-		print "$name is a dir\n" if $verbose;
-	}
-	elsif (-l _)
-	{
-		@{$srch{$srcname}{type}} =  'l';
-		print "$name is a symlink\n" if $verbose;
-	}
-	else
-	{
-		print "not a file, symlink or directory: $name\n";
-	}
-	spin() unless $silent;
-}
 
 sub usage
 {
@@ -404,118 +359,118 @@ sub buildstage
 	print "done.\n" unless $silent;
 }
 
-#
-# buildstage2(client name, source repository root directory, stage directory)
-#
-sub buildstage2
-{
-	our $client = $_[0];
-	our $nsrc   = $_[1]; # new src
-	our $dest   = $_[2];
-
-	chdir $nsrc;
-	print "pwd is now $nsrc (repository area root)\n" if $verbose;
-
-
-	# link files to staging area
-	File::Find::find(
-			 {
-			  preprocess  => \&filtercontrolfiles,
-			  wanted      => \&hardlinkfiles,
-			  postprocess => \&setdirdate,
-			  no_chdir    => 1
-			 },
-			 "."
-			);
-	nospin() unless $silent;
-
-	s|^\.|| foreach @excludepatterns;
-
-}
-
-#
-# rbuildstage2(client, path, source repository root directory, stage directory)
-#
-sub rbuildstage2
+sub buildstageclient
 {
 	my $client = $_[0];
-	my $path   = $_[1]; # new src
-	my $nsrc   = $_[2]; # new src
-	my $dest   = $_[3];
+	@masks  = @{$maskshash{$client}};    # @masks is a global var
 
-	chdir $nsrc;
-	print "pwd is now $nsrc (repository area root)\n" if $verbose;
+	print "masks are " . RED . BOLD . join(" ", @masks) . RESET . ".\n" unless $silent;
 
-	my $pc;  # path component
-	$path =~ s|^/|| ; 
-	$path =~ s|/$|| ; 
-	my @pcs =  split "/", $path ;
-	$pc = shift @pcs ; 
+	print "deleting old image for $client in $stg/$client ... " unless $silent;
+	system "/bin/rm -rf $stg/$client";
+	if ($? != 0) { die "could not /bin/rm -rf $stg/$client"; }
+	print "done.\n" unless $silent;
+	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
 
-	#filter controlfile code...
-
-	# hardlink files code...
-
-	lstat $name;    # need lstat not stat to correctly identify symlinks
-
-	if (-f _)
+	print "building new image for $client in $stg/$client ... " unless $silent;
+	our @excludepatterns;
+	&buildstagepath($client, "/");
+	foreach my $path ( keys %{ $cph{$client} } )
 	{
-		print "$name is a file\n" if $verbose;
-		link("$nsrc/$pc", "$dest/$pc") || die "unable to link $nsrc/$pc to $dest/$pc";
+		#&buildstagepath($client, $path);
+		@{$cph{$client}{$path}} = @excludepatterns;
 	}
-	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
+
+	print "done.\n" unless $silent;
+}
+
+sub buildstagepath
+{
+	my $client = $_[0];
+	my $path   = $_[1];
+
+	$path =~ s|^/||;
+
+	&rbuildstagepath( $maskshash{$client} , \%srch , $path, "$stg/$client" );
+}
+
+sub rbuildstagepath
+{
+	my @masks =  [ $_[0] ];
+	my $srch   = $_[1];
+	my $path   = $_[2];
+	our $dest   = $_[3];
+
+	if ( $path )
 	{
-		print "$name is a dir\n" if $verbose;
-		my ($mode, $uid, $gid) = (stat(_))[ 2, 4, 5 ];
-		$mode = $mode & 07777;    # mask off file type
-		# directory name is set to stgname by setdirdate function after all files and subdirectories have been processed.
-		mkdir "$dest/$pc", $mode || die "unable to mkdir $dest/$pc";
-		chown $uid, $gid, "$dest/$pc";
-	}
-	elsif (-l _)
-	{
+		my @pcs = split "/",$path;
 
-		# Need some special code here to handle copying or
-		# hardlink of relative symlinks
-
-		print "$name is a symlink\n" if $verbose;
-		if ($abletolinktosymlinks)
-		{
-			link("$nsrc/$pc", "$dest/$pc") || die "unable to link $nsrc/$pc to $dest/$pc";
-		}
-		else
-		{
-			# deference symlink
-			my $target = readlink;
-
-			# create new symlink like original
-			symlink($target, "$dest/$pc") || die "unable to symlink $target to $dest/$pc";
-
-			# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
-			# utime(time, (lstat($name))[9], "$dest/$pc");
-		}
+		# TODO	if 
 	}
 	else
 	{
-		print "not a file, symlink or directory: $name\n";
-	}
-	
-	my @exclusionlist = &rbuildstage2($client,$path,$nsrc,$dest);
+		my @files = &filtercontrolfiles( keys %{$srch}  );  #EXTRACT basenames!
 
-	# set dirdate code...
-	{
-		(my $tdir = $dir) =~ s|^./||;
-		my $tbasedir = $tdir;
-		if ($tbasedir =~ m|(.*)\.\w[\w\-]*(,\w[\w-]*)*\.a\~$|)
+		foreach my $srcname ( @files )
 		{
-			$tbasedir = $1;
-			rename "$dest/$tdir", "$dest/$tbasedir";
-		}
-		utime(time, (stat($dir))[9], "$dest/$tbasedir");
-	}
+			my $stgname = $srcname;
 
-	s|^\.|| foreach @excludepatterns;
+			if ($stgname =~ m|(.*)\.\w[\w\-\,]*\.a\~$|)
+			{
+				$stgname = $1;
+			}
+			my $destname  = "$dest/$stgname";
+
+			if ( $srch{$srcname}{type} eq "f"  ) 
+			{
+				print "$srcname is a file\n" if $verbose;
+				link("$src/$srch{$srcname}{fullpath}", "$destname") || die "unable to link $src/$srch{$srcname}{fullname} to $destname";
+			}
+			# -d on symlink to a dir will succeed on linux/ext2fs
+			elsif ( $srch{$srcname}{type} eq "f"  ) 
+			{
+				print "$srcname is a dir\n" if $verbose;
+				my($mode, $uid, $gid, $mtime) =  @{$srch{$srcname}{stat}}[ 2, 4, 5, 9 ];
+				$mode = $mode & 07777;    # mask off file type
+				mkdir $destname, $mode || die "unable to mkdir $destname";
+				chown $uid, $gid, "$destname";
+				&rbuildstagepath( $maskshash{$client}, $srch{$srcname}{dir} , $path, $destname );
+				utime(time, $mtime, $destname );
+
+			}
+			elsif ( $srch{$srcname}{type} eq "l"  ) 
+			{
+
+				# Need some special code here to handle copying or
+				# hardlink of relative symlinks
+
+				print "$srcname is a symlink\n" if $verbose;
+				if ($abletolinktosymlinks)
+				{
+					link("$src/$srch{$srcname}{fullpath}", "$destname") || die "unable to link $src/$srch{$srcname}{fullpath} to $destname";
+				}
+				else
+				{
+					# deference symlink
+					my $target = $srch{$srcname}{readlink};
+
+					# create new symlink like original
+					symlink($target, $destname) || die "unable to symlink $target to $destname";
+
+					# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
+					# my $mtime =  @{$srch{$srcname}{stat}}[ 9 ];
+					# utime(time, $mtime, $destname);
+				}
+			}
+			else
+			{
+				print "not a file, symlink or directory: $srcname\n";
+			}
+		}
+	}
 }
+
+
 
 sub filtercontrolfiles
 {
@@ -563,10 +518,12 @@ sub filtercontrolfiles
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
 			#my $targetdir = join ("/" ,  (map  { $_ =~ s/\.\w[\w\-,]*\.a~$/$1/ ; $_ }   split("/",$dir) )  );
-			my $targetdir = $dir;
-			$targetdir =~ s|\.\w[\w\-,]*\.a~/|/|;
-			$targetdir =~ s|\.\w[\w\-,]*\.a~$||;
-			push(@excludepatterns, $targetdir . "/" . $basename);
+			##my $targetdir = $dir;
+			##$targetdir =~ s|\.\w[\w\-,]*\.a~/|/|;
+			##$targetdir =~ s|\.\w[\w\-,]*\.a~$||;
+			##push(@excludepatterns, $targetdir . "/" . $basename);
+
+			push(@excludepatterns, $dest . "/" . $basename);
 		}
 	}
 
