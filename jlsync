@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.56 2005/06/30 18:36:07 plastic Exp $
+# $Id: jlsync,v 1.57 2005/06/30 22:12:49 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -115,7 +115,7 @@ foreach my $arg (@ARGV)
 	my @clients   = split(",", $1);
 	foreach my $client (@clients)
 	{
-		$cph{$client}{$path} = [ () ]  ;
+		@{$cph{$client}{$path}} =  ()   ;
 	}
 }
 
@@ -194,7 +194,7 @@ foreach $client (keys %cph)
 
 foreach $client (keys %cph)
 {
-	foreach $path ( %{ $cph{$client} } )
+	foreach $path ( keys %{ $cph{$client} } )
 	{
 
 		print "exclude patterns for " . RED . BOLD . $client . ":" . $path . RESET . " are:\n" . ON_CYAN . "\n" . join("\n", @{$cph{$client}{$path}}) . "\n" . RESET . "\n" unless $silent;
@@ -396,10 +396,11 @@ sub buildstagepath
 
 sub rbuildstagepath
 {
-	my @masks =  [ $_[0] ];
+	my $masksref =  $_[0];
 	my $srch   = $_[1];
 	my $path   = $_[2];
-	our $dest   = $_[3];
+	my $dest   = $_[3];
+	my @masks =  [ $masksref ];
 
 	if ( $path )
 	{
@@ -414,6 +415,11 @@ sub rbuildstagepath
 		foreach my $srcname ( @files )
 		{
 			my $stgname = $srcname;
+			#print "srcname is $srcname \n";
+			#print "type is  $srch->{$srcname}{type} \n";
+			#print "lstat is " . join(",", $srch->{$srcname}{lstat}) . "\n";
+			#print "dir is " .  $srch->{$srcname}{dir} . "\n";
+			#print "readlink is " .  $srch->{$srcname}{readlink} . "\n";
 
 			if ($stgname =~ m|(.*)\.\w[\w\-\,]*\.a\~$|)
 			{
@@ -421,24 +427,23 @@ sub rbuildstagepath
 			}
 			my $destname  = "$dest/$stgname";
 
-			if ( $srch{$srcname}{type} eq "f"  ) 
+			if ( $srch->{$srcname}{type} eq "f"  ) 
 			{
 				print "$srcname is a file\n" if $verbose;
-				link("$src/$srch{$srcname}{fullpath}", "$destname") || die "unable to link $src/$srch{$srcname}{fullname} to $destname";
+				link($srch->{$srcname}{fullpath}, $destname) || die "unable to link $srch->{$srcname}{fullname} to $destname";
 			}
-			# -d on symlink to a dir will succeed on linux/ext2fs
-			elsif ( $srch{$srcname}{type} eq "f"  ) 
+			elsif ( $srch->{$srcname}{type} eq "d"  ) 
 			{
 				print "$srcname is a dir\n" if $verbose;
-				my($mode, $uid, $gid, $mtime) =  @{$srch{$srcname}{stat}}[ 2, 4, 5, 9 ];
+				my($mode, $uid, $gid, $mtime) =  @{$srch->{$srcname}{lstat}}[ 2, 4, 5, 9 ];
 				$mode = $mode & 07777;    # mask off file type
 				mkdir $destname, $mode || die "unable to mkdir $destname";
 				chown $uid, $gid, "$destname";
-				&rbuildstagepath( $maskshash{$client}, $srch{$srcname}{dir} , $path, $destname );
+				&rbuildstagepath( $masksref, $srch->{$srcname}{dir} , $path, $destname );
 				utime(time, $mtime, $destname );
 
 			}
-			elsif ( $srch{$srcname}{type} eq "l"  ) 
+			elsif ( $srch->{$srcname}{type} eq "l"  ) 
 			{
 
 				# Need some special code here to handle copying or
@@ -447,18 +452,18 @@ sub rbuildstagepath
 				print "$srcname is a symlink\n" if $verbose;
 				if ($abletolinktosymlinks)
 				{
-					link("$src/$srch{$srcname}{fullpath}", "$destname") || die "unable to link $src/$srch{$srcname}{fullpath} to $destname";
+					link($srch->{$srcname}{fullpath}, $destname) || die "unable to link $srch->{$srcname}{fullpath} to $destname";
 				}
 				else
 				{
 					# deference symlink
-					my $target = $srch{$srcname}{readlink};
+					my $target = $srch->{$srcname}{readlink};
 
 					# create new symlink like original
 					symlink($target, $destname) || die "unable to symlink $target to $destname";
 
 					# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
-					# my $mtime =  @{$srch{$srcname}{stat}}[ 9 ];
+					# my $mtime =  @{$srch->{$srcname}{stat}}[ 9 ];
 					# utime(time, $mtime, $destname);
 				}
 			}
@@ -523,7 +528,8 @@ sub filtercontrolfiles
 			##$targetdir =~ s|\.\w[\w\-,]*\.a~$||;
 			##push(@excludepatterns, $targetdir . "/" . $basename);
 
-			push(@excludepatterns, $dest . "/" . $basename);
+			#FIXME push(@excludepatterns, $dest . "/" . $basename);
+			push(@excludepatterns,  $basename);
 		}
 	}
 
