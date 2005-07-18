@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.58 2005/07/01 11:47:02 plastic Exp $
+# $Id: jlsync,v 1.59 2005/07/18 10:16:15 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -199,7 +199,7 @@ foreach $client (keys %cph)
 
 		print "exclude patterns for " . RED . BOLD . $client . ":" . $path . RESET . " are:\n" . ON_CYAN . "\n" . join("\n", @{$cph{$client}{$path}}) . "\n" . RESET . "\n" unless $silent;
 
-		my @excludepatterns = [ $cph{$client}{$path} ];
+		my @excludepatterns = @{ $cph{$client}{$path} };
 
 		$excludepatternfile = "/tmp/" . ".jlsync-" . $client . "-" . time . "-" . $$;
 
