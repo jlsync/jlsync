@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.59 2005/07/18 10:16:15 plastic Exp $
+# $Id: jlsync,v 1.60 2005/07/19 19:04:18 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -197,15 +197,24 @@ foreach $client (keys %cph)
 	foreach $path ( keys %{ $cph{$client} } )
 	{
 
-		print "exclude patterns for " . RED . BOLD . $client . ":" . $path . RESET . " are:\n" . ON_CYAN . "\n" . join("\n", @{$cph{$client}{$path}}) . "\n" . RESET . "\n" unless $silent;
+		if ( @{ $cph{$client}{$path} } )
+		{
+			my @excludepatterns = @{ $cph{$client}{$path} };
 
-		my @excludepatterns = @{ $cph{$client}{$path} };
+			print "exclude patterns for " . CYAN . BOLD . $client . ":" . $path . RESET . " are:\n" . ON_CYAN . "\n" . join("\n", @excludepatterns) . "\n" . RESET . "\n" unless $silent;
 
-		$excludepatternfile = "/tmp/" . ".jlsync-" . $client . "-" . time . "-" . $$;
+			$excludepatternfile = "/tmp/" . ".jlsync-" . $client . "-" . time . "-" . $$;
 
-		open(TMP, ">$excludepatternfile") || die "could not open $excludepatternfile";
-		print TMP join("\n", @excludepatterns) . "\n";
-		close TMP;
+			open(TMP, ">$excludepatternfile") || die "could not open $excludepatternfile";
+			print TMP join("\n", @excludepatterns) . "\n";
+			close TMP;
+		}
+		else
+		{
+			print "there are no exclude patterns for " . CYAN . BOLD . $client . ":" . $path . RESET . "\n" unless $silent;
+			undef $excludepatternfile;
+		}
+
 
 		if ($get)
 		{
@@ -216,7 +225,7 @@ foreach $client (keys %cph)
 			&deploy($client, $path);
 		}
 
-		unlink $excludepatternfile;
+		unlink $excludepatternfile if ( defined($excludepatternfile) );
 	}
 }
 
@@ -347,21 +356,20 @@ sub buildstageclient
 
 	print "masks are " . RED . BOLD . join(" ", @masks) . RESET . ".\n" unless $silent;
 
-	print "deleting old image for $client in $stg/$client ... " unless $silent;
-	system "/bin/rm -rf $stg/$client";
-	if ($? != 0) { die "could not /bin/rm -rf $stg/$client"; }
-	print "done.\n" unless $silent;
-	mkdir "$stg/$client", 0755 or die "could not mkdir $stg/$client";
-
-	print "building new image for $client in $stg/$client ... " unless $silent;
-	my @excludepatterns = &buildstagepath($client, "/");
 	my $stgclient = "$stg/$client";
-	@excludepatterns = map { $_ =~ s|^\Q$stgclient|| ; $_ }  @excludepatterns;
+	print "deleting old image for $client in $stgclient ... " unless $silent;
+	system "/bin/rm -rf $stgclient";
+	if ($? != 0) { die "could not /bin/rm -rf $stgclient"; }
+	print "done.\n" unless $silent;
+	mkdir "$stgclient", 0755 or die "could not mkdir $stgclient";
+
+	print "building new image for $client in $stgclient ... " unless $silent;
+
 	foreach my $path ( keys %{ $cph{$client} } )
 	{
-		#&buildstagepath($client, $path);
-		@{$cph{$client}{$path}} = @excludepatterns;
+		@{$cph{$client}{$path}} =  &buildstagepath($client, $path);
 	}
+	utime(time, (stat($src))[9], $stgclient );
 
 	nospin() unless $silent;
 	print "done.\n" unless $silent;
@@ -374,91 +382,105 @@ sub buildstagepath
 
 	$path =~ s|^/||;
 
-	return &rbuildstagepath( $maskshash{$client} , \%srch , $path, "$stg/$client" );
+	my @excludepatterns = &rbuildstagepath( $maskshash{$client} , \%srch , $path, "$stg/$client" );
+	my $stgclient = "$stg/$client";
+	@excludepatterns = map { $_ =~ s|^\Q$stgclient|| ; $_ }  @excludepatterns;
+	return @excludepatterns;
 }
 
 sub rbuildstagepath
 {
-	my $masksref =  $_[0];
-	my $srch   = $_[1];
-	my $path   = $_[2];
-	my $dest   = $_[3];
+	my $masksref =  $_[0];   # reference to array of client masks as listed jlsync.config
+	my $srch   = $_[1];      # reference to source hash rooted at current directory level
+	my $path   = $_[2];      # string containing "remaining/path/to/process"
+	my $dest   = $_[3];	 # full path of destination directory for remaining build
+
 	my @masks =  [ $masksref ];
 	my @excludepatterns;
+	my $filesaref;
+	my $excludearef;
 
-	if ( $path )
+	if ( defined($path) ) # still some remaining path to selectively process.
 	{
 		my @pcs = split "/",$path;
+		my $nextpc = shift @pcs;
 
-		# TODO	if 
+		# selectively filter controlfiles....
+		($filesaref, $excludearef) = &filtercontrolfiles( [ keys %{$srch} ] , $nextpc ); 
+
+		$path = join "/", @pcs; # remaining path.
 	}
 	else
 	{
-		my ($filesaref, $excludearef) = &filtercontrolfiles( keys %{$srch}  ); 
+		($filesaref, $excludearef) = &filtercontrolfiles( [ keys %{$srch} ]  ); 
+	}
 
-		@excludepatterns = map { $dest . "/" . $_ } @{$excludearef};
+	@excludepatterns = map { $dest . "/" . $_ } @{$excludearef};
 
-		foreach my $srcname ( @{$filesaref} )
+	foreach my $srcname ( @{$filesaref} )
+	{
+		my $stgname = $srcname;
+		#print "srcname is $srcname \n";
+		#print "type is  $srch->{$srcname}{type} \n";
+		#print "lstat is " . join(",", $srch->{$srcname}{lstat}) . "\n";
+		#print "dir is " .  $srch->{$srcname}{dir} . "\n";
+		#print "readlink is " .  $srch->{$srcname}{readlink} . "\n";
+
+		if ($stgname =~ m|(.*)\.\w[\w\-\,]*\.a\~$|)
 		{
-			my $stgname = $srcname;
-			#print "srcname is $srcname \n";
-			#print "type is  $srch->{$srcname}{type} \n";
-			#print "lstat is " . join(",", $srch->{$srcname}{lstat}) . "\n";
-			#print "dir is " .  $srch->{$srcname}{dir} . "\n";
-			#print "readlink is " .  $srch->{$srcname}{readlink} . "\n";
+			$stgname = $1;
+		}
+		my $destname  = "$dest/$stgname";
 
-			if ($stgname =~ m|(.*)\.\w[\w\-\,]*\.a\~$|)
+		if ( $srch->{$srcname}{type} eq "f"  ) 
+		{
+			print "$srcname is a file\n" if $verbose;
+			link($srch->{$srcname}{fullpath}, $destname) || die "unable to link $srch->{$srcname}{fullname} to $destname";
+		}
+		elsif ( $srch->{$srcname}{type} eq "d"  ) 
+		{
+			print "$srcname is a dir\n" if $verbose;
+			my($mode, $uid, $gid, $mtime) =  @{$srch->{$srcname}{lstat}}[ 2, 4, 5, 9 ];
+			if ( ! -d $destname )
 			{
-				$stgname = $1;
-			}
-			my $destname  = "$dest/$stgname";
-
-			if ( $srch->{$srcname}{type} eq "f"  ) 
-			{
-				print "$srcname is a file\n" if $verbose;
-				link($srch->{$srcname}{fullpath}, $destname) || die "unable to link $srch->{$srcname}{fullname} to $destname";
-			}
-			elsif ( $srch->{$srcname}{type} eq "d"  ) 
-			{
-				print "$srcname is a dir\n" if $verbose;
-				my($mode, $uid, $gid, $mtime) =  @{$srch->{$srcname}{lstat}}[ 2, 4, 5, 9 ];
 				$mode = $mode & 07777;    # mask off file type
 				mkdir $destname, $mode || die "unable to mkdir $destname";
-				chown $uid, $gid, "$destname";
-				push ( @excludepatterns , &rbuildstagepath( $masksref, $srch->{$srcname}{dir} , $path, $destname ));
-				utime(time, $mtime, $destname );
-
+				chown $uid, $gid, $destname;
 			}
-			elsif ( $srch->{$srcname}{type} eq "l"  ) 
+			push ( @excludepatterns , &rbuildstagepath( $masksref, $srch->{$srcname}{dir} , $path, $destname ));
+			utime(time, $mtime, $destname );
+
+		}
+		elsif ( $srch->{$srcname}{type} eq "l"  ) 
+		{
+
+			# Need some special code here to handle copying or
+			# hardlink of relative symlinks
+
+			print "$srcname is a symlink\n" if $verbose;
+			if ($abletolinktosymlinks)
 			{
-
-				# Need some special code here to handle copying or
-				# hardlink of relative symlinks
-
-				print "$srcname is a symlink\n" if $verbose;
-				if ($abletolinktosymlinks)
-				{
-					link($srch->{$srcname}{fullpath}, $destname) || die "unable to link $srch->{$srcname}{fullpath} to $destname";
-				}
-				else
-				{
-					# deference symlink
-					my $target = $srch->{$srcname}{readlink};
-
-					# create new symlink like original
-					symlink($target, $destname) || die "unable to symlink $target to $destname";
-
-					# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
-					# my $mtime =  @{$srch->{$srcname}{stat}}[ 9 ];
-					# utime(time, $mtime, $destname);
-				}
+				link($srch->{$srcname}{fullpath}, $destname) || die "unable to link $srch->{$srcname}{fullpath} to $destname";
 			}
 			else
 			{
-				print "not a file, symlink or directory: $srcname\n";
+				# deference symlink
+				my $target = $srch->{$srcname}{readlink};
+
+				# create new symlink like original
+				symlink($target, $destname) || die "unable to symlink $target to $destname";
+
+				# set timestamp - this doesn't work sets time stamp on target of link not symlink itself. rsync seems to be ignoring symlink timestamps anyway.
+				# my $mtime =  @{$srch->{$srcname}{stat}}[ 9 ];
+				# utime(time, $mtime, $destname);
 			}
 		}
+		else
+		{
+			print "not a file, symlink or directory: $srcname\n";
+		}
 	}
+
 	return @excludepatterns;
 }
 
@@ -466,8 +488,16 @@ sub rbuildstagepath
 
 sub filtercontrolfiles
 {
-	my @filelist = @_;
-	my @newlist  = sort @filelist;
+	my @newlist = @{$_[0]};
+	my $basenamefilter = $_[1];
+
+	if ( defined($basenamefilter) )
+	{
+		@newlist = grep /^$basenamefilter/, @newlist
+
+	}
+
+	@newlist  = sort @newlist;
 	my @excludepatterns;
 
 	if ($verbose)
@@ -634,7 +664,10 @@ sub deploy_rsync
 
 	$verbose .= " --verbose " unless ($report);
 
-	my $command = "$rsync $rsync_opts $dryrun $verbose --itemize-changes --compress --archive --delete --recursive --links --relative --exclude-from=$excludepatternfile  .$path $client:/";
+	my $command = "$rsync $rsync_opts $dryrun $verbose --itemize-changes --compress --archive --delete --recursive --links --relative";
+	$command .= " --exclude-from=$excludepatternfile" if ( defined($excludepatternfile) );
+	
+	$command .=" .$path $client:/";
 
 	unless ($silent)
 	{
