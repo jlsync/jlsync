@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.60 2005/07/19 19:04:18 plastic Exp $
+# $Id: jlsync,v 1.61 2005/07/20 16:50:59 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -671,7 +671,7 @@ sub deploy_rsync
 
 	unless ($silent)
 	{
-		print($dryrun ? "running dry-run first for ${client}:${path} ...\n" : "running rsync for real for ${client}:${path} ...\n");
+		print($dryrun ? "running dry-run first for ". YELLOW . BOLD . "${client}:${path}" . RESET  " ...\n" : "running rsync for real for " . GREEN . BOLD . "${client}:${path}" . RESET . " ...\n");
 		print($dryrun ? BLACK ON_YELLOW BOLD: ON_GREEN BOLD);
 		print $command . "\n";
 		print RESET . ($dryrun ? BLACK ON_YELLOW: ON_GREEN);
