@@ -14,3 +14,7 @@
 
 
 - wrap rsync exec in a single function to capture output and check return codes.
+
+- all relative paths on commands when working in the repository.
+
+
