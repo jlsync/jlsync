@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.61 2005/07/20 16:50:59 plastic Exp $
+# $Id: jlsync,v 1.62 2005/09/11 16:43:44 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -666,7 +666,6 @@ sub deploy_rsync
 
 	my $command = "$rsync $rsync_opts $dryrun $verbose --itemize-changes --compress --archive --delete --recursive --links --relative";
 	$command .= " --exclude-from=$excludepatternfile" if ( defined($excludepatternfile) );
-	
 	$command .=" .$path $client:/";
 
 	unless ($silent)
@@ -792,7 +791,9 @@ sub get
 	# now copy files from destination back into staging
 	# - no could overwrite contents of hard linked files?
 
-	my $command = "$rsync $rsync_opts --compress --archive --exclude-from=$excludepatternfile --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose $client:$path $stggettmp \n";
+	my $command = "$rsync $rsync_opts --compress --itemize-changes --archive --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose";
+	$command .= " --exclude-from=$excludepatternfile" if ( defined($excludepatternfile) );
+	$command .=" $client:$path $stggettmp";
 
 	print "collecting remote files...\n" . BOLD . BLACK . ON_YELLOW . $command . "\n" . RESET . BLACK . ON_YELLOW;
 	system $command; # todo check return code
@@ -924,7 +925,7 @@ sub get
 
 	if ( $found eq 'yes' )
 	{
-		print "current source repository version...\n"; 
+		print "current source repository ( $src ) version...\n"; 
 		my $confirmed = '';
 
 		if ( -f $srcap )
@@ -938,59 +939,69 @@ sub get
 				$confirmed = "(warning: source and stage inode mismatch)";
 			}
 		}
-		print ON_WHITE .  BLUE . "$srcap $confirmed" . RESET . "\n";
+		my $nfiles = "";
+		if (-d $srcap)
+		{
+			$nfiles = `find $srcap -print | wc -l`;
+			$nfiles =~ s/\D//g;
+			$nfiles = "( number of files: $nfiles )";
+		}
+		print ON_WHITE .  BLUE . "$srcap $confirmed $nfiles" . RESET . "\n";
 		chdir dirname($srcap);
 		print GREEN;
 		system "ls", "-ld", basename($srcap);
 		print RESET;
-		if (-d $srcap)
-		{
-			print "number of files: ";
-			system "find $srcap -print | wc -l";
-		}
 	}
 
 
 	if (-e $stgget)
 	{
-		print "current stage area version for $client is\n";
-		print ON_WHITE . BLUE . "$stgget" . RESET . "\n";
+		print "current stage area ( $stg ) version for $client is\n";
+		my $nfiles = "";
+		if (-d $stgget)
+		{
+			$nfiles = `find $stgget -print | wc -l`;
+			$nfiles =~ s/\D//g;
+			$nfiles = "( number of files: $nfiles )";
+		}
+		print ON_WHITE . BLUE . "$stgget $nfiles" . RESET . "\n";
 		chdir dirname($stgget);
 		print GREEN;
 		system "ls", "-ld", basename($stgget);
 		print RESET;
-		if (-d $stgget)
-		{
-			print "number of files: ";
-			system "find $stgget -print | wc -l";
-		}
 	}
 
 	if (-e $target && ($target ne $srcap ))
 	{
 		print "current repository target version is\n";
-		print ON_WHITE . BLUE . "$target" . RESET . "\n";
+		my $nfiles = "";
+		if (-d $target)
+		{
+			$nfiles = `find $target -print | wc -l`;
+			$nfiles =~ s/\D//g;
+			$nfiles = "( number of files: $nfiles )";
+		}
+		print ON_WHITE . BLUE . "$target $nfiles" . RESET . "\n";
 		chdir dirname($target);
 		print GREEN;
 		system "ls", "-ld", basename($target);
 		print RESET;
-		if (-d $target)
-		{
-			print "number of files: ";
-			system "find $target -print | wc -l";
-		}
 	}
 
-	print "remote version just got is...\n" . ON_WHITE . BLUE . "$stggettmppath" . RESET . "\n";
+	print "remote ( $stggettmp ) version just got is...\n";
+	my $nfiles = "";
+        if (-d $stggettmppath)
+        {
+                $nfiles = `find $stggettmp -print | wc -l`; 
+		$nfiles =~ s/\D//g;
+		$nfiles = "( number of files: $nfiles )";
+        }
+
+	print ON_WHITE . BLUE . "$stggettmppath $nfiles" . RESET . "\n";
 	chdir dirname($stggettmppath);
 	print GREEN;
 	system "ls", "-ld", basename($stggettmppath);
 	print RESET;
-	if (-d $stggettmppath)
-	{
-		print "number of files: ";
-		system "find $stggettmp -print | wc -l";
-	}
 
 	my $yes = 0;
 	unless ($real)
