@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.64 2005/09/12 15:38:11 plastic Exp $
+# $Id: jlsync,v 1.65 2005/09/12 15:39:30 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -87,7 +87,7 @@ GetOptions(
 	   "get"              => \$get,        # --get
 	   "verbose"          => \$verbose,    # --verbose
 	   "report"           => \$report,     # --report
-	   "email=s|mail=s"   => \$email,      # --email=address
+	   "email|mail=s"   => \$email,      # --email=address
 	   "nocolor|nocolour" => \$nocolor,    # --nocolor
 	   "mask=s"           => \$getmask,    # --mask=MASKNAME
 	   "silent"           => \$silent,     # --silent available on commandline for testing
