@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.66 2005/10/03 17:06:22 plastic Exp $
+# $Id: jlsync,v 1.67 2005/10/05 20:46:53 plastic Exp $
 
 
 #################### BEGIN CONFIGURATION SECTION ###########################
@@ -279,6 +279,7 @@ exit 0;
 # directory hash { fileone => filehash,  filetwo => filehash }
 # filehash { lstat => (normal lstat array), 
 #	     type => "f" or "d" or "l",
+#	     srcpath => "/src/dir/full/path",
 #	     dir => dirhash ,
 #            link => "link/target" ,
 #  ????      control => { 
@@ -312,7 +313,7 @@ sub srcfile
 	my $filename = $_[0];
 	my %fileh;
 
-	$fileh{fullpath}  =  $filename;
+	$fileh{srcpath}  =  $filename;
 	$fileh{lstat}  =   [ lstat $filename ];
 
 	if (-f _)
@@ -363,7 +364,7 @@ sub buildstageclient
 	print "done.\n" unless $silent;
 	mkdir "$stgclient", 0755 or die "could not mkdir $stgclient";
 
-	print "building new image for $client in $stgclient ... " unless $silent;
+	print "building new image for $client in $stgclient ...\n" unless $silent;
 
 	foreach my $path ( keys %{ $cph{$client} } )
 	{
@@ -373,6 +374,7 @@ sub buildstageclient
 
 	nospin() unless $silent;
 	print "done.\n" unless $silent;
+	print "done building new image for $client in $stgclient\n" unless $silent;
 }
 
 sub buildstagepath
@@ -388,6 +390,8 @@ sub buildstagepath
 	return @excludepatterns;
 }
 
+# rbuildstagepath - recursive build stage path
+#
 sub rbuildstagepath
 {
 	my $masksref =  $_[0];   # reference to array of client masks as listed jlsync.config
@@ -406,13 +410,13 @@ sub rbuildstagepath
 		my $nextpc = shift @pcs;
 
 		# selectively filter controlfiles....
-		($filesaref, $excludearef) = &filtercontrolfiles( [ keys %{$srch} ] , $nextpc ); 
+		($filesaref, $excludearef) = &filtercontrolfiles( [ keys %{$srch} ] , $nextpc , $srch ); 
 
 		$path = join "/", @pcs; # remaining path.
 	}
 	else
 	{
-		($filesaref, $excludearef) = &filtercontrolfiles( [ keys %{$srch} ]  ); 
+		($filesaref, $excludearef) = &filtercontrolfiles( [ keys %{$srch} ] , undef , $srch ); 
 	}
 
 	@excludepatterns = map { $dest . "/" . $_ } @{$excludearef};
@@ -435,7 +439,7 @@ sub rbuildstagepath
 		if ( $srch->{$srcname}{type} eq "f"  ) 
 		{
 			print "$srcname is a file\n" if $verbose;
-			link($srch->{$srcname}{fullpath}, $destname) || die "unable to link $srch->{$srcname}{fullname} to $destname";
+			link($srch->{$srcname}{srcpath}, $destname) || die "unable to link $srch->{$srcname}{srcpath} to $destname";
 		}
 		elsif ( $srch->{$srcname}{type} eq "d"  ) 
 		{
@@ -460,7 +464,7 @@ sub rbuildstagepath
 			print "$srcname is a symlink\n" if $verbose;
 			if ($abletolinktosymlinks)
 			{
-				link($srch->{$srcname}{fullpath}, $destname) || die "unable to link $srch->{$srcname}{fullpath} to $destname";
+				link($srch->{$srcname}{srcpath}, $destname) || die "unable to link $srch->{$srcname}{srcpath} to $destname";
 			}
 			else
 			{
@@ -489,11 +493,11 @@ sub filtercontrolfiles
 {
 	my @newlist = @{$_[0]};
 	my $basenamefilter = $_[1];
+	my $srchref = $_[2];
 
 	if ( defined($basenamefilter) )
 	{
 		@newlist = grep /^$basenamefilter/, @newlist
-
 	}
 
 	@newlist  = sort @newlist;
@@ -515,7 +519,8 @@ sub filtercontrolfiles
 		my $a;
 		foreach $a (@alist)
 		{
-			print "a~ is $a\n" if $verbose;
+			nospin() unless $silent;
+			print BLUE ."  adding:$srchref->{$a}->{srcpath}" . RESET . "\n" unless $silent;
 			(my $basename = $a) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
@@ -526,7 +531,8 @@ sub filtercontrolfiles
 		my $d;
 		foreach $d (@dlist)
 		{
-			print "d~ is $d\n" if $verbose;
+			nospin() unless $silent;
+			print MAGENTA . "deleting:$srchref->{$d}->{srcpath}" . RESET . "\n" unless $silent;
 			(my $basename = $d) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/, @newlist;
@@ -540,13 +546,13 @@ sub filtercontrolfiles
 			(my $basename = $e) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
+
 			#my $targetdir = join ("/" ,  (map  { $_ =~ s/\.\w[\w\-,]*\.a~$/$1/ ; $_ }   split("/",$dir) )  );
 			##my $targetdir = $dir;
 			##$targetdir =~ s|\.\w[\w\-,]*\.a~/|/|;
 			##$targetdir =~ s|\.\w[\w\-,]*\.a~$||;
 			##push(@excludepatterns, $targetdir . "/" . $basename);
 
-			#FIXME push(@excludepatterns, $dest . "/" . $basename);
 			push(@excludepatterns,  $basename);
 		}
 	}
