@@ -6,8 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.67 2005/10/05 20:46:53 plastic Exp $
-
+# $Id: jlsync,v 1.68 2005/10/16 20:55:09 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -19,7 +18,7 @@ my $rsync_opts = "--rsync-path=/usr/local/bin/rsync --rsh=/usr/local/bin/ssh";
 
 # directories variables are without trailing /
 # leave $jlsyncdir set to "/jlsync" for compatibility with furture upgrades
-my $jlsyncdir  = "/jlsync";
+my $jlsyncdir = "/jlsync";
 
 # $src, $stg and $backup_dir must be on the same filesystem
 my $src        = $jlsyncdir . "/source";
@@ -27,7 +26,7 @@ my $stg        = $jlsyncdir . "/stage";
 my $backup_dir = $jlsyncdir . "/backup";
 
 # jlsync config file
-my $config     = $jlsyncdir . "/etc/jlsync.config";
+my $config = $jlsyncdir . "/etc/jlsync.config";
 
 # $smtpserver is used by Mail::Mailer to send --email reports through
 my $smtpserver = '127.0.0.1';
@@ -39,7 +38,7 @@ my $abletolinktosymlinks = 0;    # linux = 1 , solaris = 0 ;
 
 use strict;
 use Cwd;
-use File::Find ();    # recent version required.
+use File::Find ();               # recent version required.
 use File::Path;
 
 # use File::stat;		# TODO: maybe use this later.
@@ -51,23 +50,23 @@ use Mail::Mailer;
 # for the convenience of &wanted calls, including -eval statements:
 #use vars qw/*name *dir  $mask @excludepatterns @masks/;
 use vars qw/*name *dir/;
-our ( $mask, @excludepatterns, @masks, $nsrc, $dest);
-*name  = *File::Find::name;
-*dir   = *File::Find::dir;
+our ($mask, @excludepatterns, @masks, $nsrc, $dest);
+*name = *File::Find::name;
+*dir  = *File::Find::dir;
 
 my $reportfrom = 'jlsync report <root>';
 
-my @controlfiles = ();           # array of control file hashes.
+my @controlfiles = ();    # array of control file hashes.
 
-$| = 1;                          # turn on autoflush
+$| = 1;                   # turn on autoflush
 
 my $spinpos;
 my $spinning;
 my $spinlen;
 
-umask 0;                         # needed by subsequent mkdirs
+umask 0;                  # needed by subsequent mkdirs
 
-my %cph;                         # Client Path Hash
+my %cph;                  # Client Path Hash
 
 my $client;
 my $path;
@@ -87,11 +86,11 @@ GetOptions(
 	   "get"              => \$get,        # --get
 	   "verbose"          => \$verbose,    # --verbose
 	   "report"           => \$report,     # --report
-	   "email|mail=s"   => \$email,      # --email=address
+	   "email|mail=s"     => \$email,      # --email=address
 	   "nocolor|nocolour" => \$nocolor,    # --nocolor
 	   "mask=s"           => \$getmask,    # --mask=MASKNAME
 	   "silent"           => \$silent,     # --silent available on commandline for testing
-	  ) || &usage ;
+	  ) || &usage;
 
 &usage unless (defined $ARGV[0]);
 
@@ -115,7 +114,7 @@ foreach my $arg (@ARGV)
 	my @clients   = split(",", $1);
 	foreach my $client (@clients)
 	{
-		@{$cph{$client}{$path}} =  ()   ;
+		@{$cph{$client}{$path}} = ();
 	}
 }
 
@@ -177,7 +176,7 @@ foreach $client (keys %cph)
 
 print "reading source repository image in... " unless $silent;
 my %srch = &srcdir($src);
-nospin() unless $silent;
+nospin()        unless $silent;
 print "done.\n" unless $silent;
 
 foreach $client (keys %cph)
@@ -194,12 +193,12 @@ foreach $client (keys %cph)
 
 foreach $client (keys %cph)
 {
-	foreach $path ( keys %{ $cph{$client} } )
+	foreach $path (keys %{$cph{$client}})
 	{
 
-		if ( @{ $cph{$client}{$path} } )
+		if (@{$cph{$client}{$path}})
 		{
-			my @excludepatterns = @{ $cph{$client}{$path} };
+			my @excludepatterns = @{$cph{$client}{$path}};
 
 			print "exclude patterns for " . CYAN . BOLD . $client . ":" . $path . RESET . " are:\n" . ON_CYAN . "\n" . join("\n", @excludepatterns) . "\n" . RESET . "\n" unless $silent;
 
@@ -215,7 +214,6 @@ foreach $client (keys %cph)
 			undef $excludepatternfile;
 		}
 
-
 		if ($get)
 		{
 			&get($client, $path);
@@ -225,7 +223,7 @@ foreach $client (keys %cph)
 			&deploy($client, $path);
 		}
 
-		unlink $excludepatternfile if ( defined($excludepatternfile) );
+		unlink $excludepatternfile if (defined($excludepatternfile));
 	}
 }
 
@@ -277,12 +275,12 @@ exit 0;
 
 # datastructure
 # directory hash { fileone => filehash,  filetwo => filehash }
-# filehash { lstat => (normal lstat array), 
+# filehash { lstat => (normal lstat array),
 #	     type => "f" or "d" or "l",
 #	     srcpath => "/src/dir/full/path",
 #	     dir => dirhash ,
 #            link => "link/target" ,
-#  ????      control => { 
+#  ????      control => {
 #                         a => { maska => filehash, maskb => filehas, ... }
 #                         d => { maska => filehash, maskb => filehas, ... }
 #                         e => { maska => filehash, maskb => filehas, ... }
@@ -296,12 +294,12 @@ sub srcdir
 	local *DIR;
 
 	#opendir(DIR,$src . "/" . $ap) || die "could not open $ap \! \n";
-	opendir(DIR,$dir) || die "could not open $dir \! \n";
+	opendir(DIR, $dir) || die "could not open $dir \! \n";
 	my $nextfile;
-	while (defined ($nextfile = readdir(DIR)))
+	while (defined($nextfile = readdir(DIR)))
 	{
 		next if $nextfile =~ /^\.\.?$/;
-		$dirh{$nextfile} = { &srcfile($dir . "/" . $nextfile ) };
+		$dirh{$nextfile} = {&srcfile($dir . "/" . $nextfile)};
 	}
 	close(DIR);
 	spin() unless $silent;
@@ -313,24 +311,24 @@ sub srcfile
 	my $filename = $_[0];
 	my %fileh;
 
-	$fileh{srcpath}  =  $filename;
-	$fileh{lstat}  =   [ lstat $filename ];
+	$fileh{srcpath} = $filename;
+	$fileh{lstat}   = [ lstat $filename ];
 
 	if (-f _)
 	{
 		print "$filename is a file\n" if $verbose;
-		$fileh{type} =  'f';
+		$fileh{type} = 'f';
 	}
 	elsif (-d _)    # -d on symlink to a dir will succeed on linux/ext2fs
 	{
 		print "$filename is a dir\n" if $verbose;
-		$fileh{type} =  'd';
-		$fileh{dir} =  { &srcdir($filename) };
+		$fileh{type} = 'd';
+		$fileh{dir}  = {&srcdir($filename)};
 	}
 	elsif (-l _)
 	{
 		print "$filename is a symlink\n" if $verbose;
-		$fileh{type} =  'l';
+		$fileh{type}     = 'l';
 		$fileh{readlink} = readlink($filename);
 	}
 	else
@@ -340,7 +338,6 @@ sub srcfile
 	return %fileh;
 }
 
-
 sub usage
 {
 	print "jlsync usage:\n";
@@ -349,11 +346,10 @@ sub usage
 	exit 1;
 }
 
-
 sub buildstageclient
 {
 	my $client = $_[0];
-	@masks  = @{$maskshash{$client}};    # @masks is a global var
+	@masks = @{$maskshash{$client}};    # @masks is a global var
 
 	print "masks are " . RED . BOLD . join(" ", @masks) . RESET . ".\n" unless $silent;
 
@@ -366,14 +362,14 @@ sub buildstageclient
 
 	print "building new image for $client in $stgclient ...\n" unless $silent;
 
-	foreach my $path ( keys %{ $cph{$client} } )
+	foreach my $path (keys %{$cph{$client}})
 	{
-		@{$cph{$client}{$path}} =  &buildstagepath($client, $path);
+		@{$cph{$client}{$path}} = &buildstagepath($client, $path);
 	}
-	utime(time, (stat($src))[9], $stgclient );
+	utime(time, (stat($src))[9], $stgclient);
 
-	nospin() unless $silent;
-	print "done.\n" unless $silent;
+	nospin()                                                    unless $silent;
+	print "done.\n"                                             unless $silent;
 	print "done building new image for $client in $stgclient\n" unless $silent;
 }
 
@@ -384,9 +380,9 @@ sub buildstagepath
 
 	$path =~ s|^/||;
 
-	my @excludepatterns = &rbuildstagepath( $maskshash{$client} , \%srch , $path, "$stg/$client" );
+	my @excludepatterns = &rbuildstagepath($maskshash{$client}, \%srch, $path, "$stg/$client");
 	my $stgclient = "$stg/$client";
-	@excludepatterns = map { $_ =~ s|^\Q$stgclient|| ; $_ }  @excludepatterns;
+	@excludepatterns = map { $_ =~ s|^\Q$stgclient||; $_ } @excludepatterns;
 	return @excludepatterns;
 }
 
@@ -394,36 +390,37 @@ sub buildstagepath
 #
 sub rbuildstagepath
 {
-	my $masksref =  $_[0];   # reference to array of client masks as listed jlsync.config
-	my $srch   = $_[1];      # reference to source hash rooted at current directory level
-	my $path   = $_[2];      # string containing "remaining/path/to/process"
-	my $dest   = $_[3];	 # full path of destination directory for remaining build
+	my $masksref = $_[0];    # reference to array of client masks as listed jlsync.config
+	my $srch     = $_[1];    # reference to source hash rooted at current directory level
+	my $path     = $_[2];    # string containing "remaining/path/to/process"
+	my $dest     = $_[3];    # full path of destination directory for remaining build
 
-	my @masks =  [ $masksref ];
+	my @masks = [$masksref];
 	my @excludepatterns;
 	my $filesaref;
 	my $excludearef;
 
-	if ( defined($path) ) # still some remaining path to selectively process.
+	if (defined($path))      # still some remaining path to selectively process.
 	{
-		my @pcs = split "/",$path;
+		my @pcs    = split "/", $path;
 		my $nextpc = shift @pcs;
 
 		# selectively filter controlfiles....
-		($filesaref, $excludearef) = &filtercontrolfiles( [ keys %{$srch} ] , $nextpc , $srch ); 
+		($filesaref, $excludearef) = &filtercontrolfiles([ keys %{$srch} ], $nextpc, $srch);
 
-		$path = join "/", @pcs; # remaining path.
+		$path = join "/", @pcs;    # remaining path.
 	}
 	else
 	{
-		($filesaref, $excludearef) = &filtercontrolfiles( [ keys %{$srch} ] , undef , $srch ); 
+		($filesaref, $excludearef) = &filtercontrolfiles([ keys %{$srch} ], undef, $srch);
 	}
 
 	@excludepatterns = map { $dest . "/" . $_ } @{$excludearef};
 
-	foreach my $srcname ( @{$filesaref} )
+	foreach my $srcname (@{$filesaref})
 	{
 		my $stgname = $srcname;
+
 		#print "srcname is $srcname \n";
 		#print "type is  $srch->{$srcname}{type} \n";
 		#print "lstat is " . join(",", $srch->{$srcname}{lstat}) . "\n";
@@ -434,28 +431,28 @@ sub rbuildstagepath
 		{
 			$stgname = $1;
 		}
-		my $destname  = "$dest/$stgname";
+		my $destname = "$dest/$stgname";
 
-		if ( $srch->{$srcname}{type} eq "f"  ) 
+		if ($srch->{$srcname}{type} eq "f")
 		{
 			print "$srcname is a file\n" if $verbose;
 			link($srch->{$srcname}{srcpath}, $destname) || die "unable to link $srch->{$srcname}{srcpath} to $destname";
 		}
-		elsif ( $srch->{$srcname}{type} eq "d"  ) 
+		elsif ($srch->{$srcname}{type} eq "d")
 		{
 			print "$srcname is a dir\n" if $verbose;
-			my($mode, $uid, $gid, $mtime) =  @{$srch->{$srcname}{lstat}}[ 2, 4, 5, 9 ];
-			if ( ! -d $destname )
+			my ($mode, $uid, $gid, $mtime) = @{$srch->{$srcname}{lstat}}[ 2, 4, 5, 9 ];
+			if (!-d $destname)
 			{
 				$mode = $mode & 07777;    # mask off file type
 				mkdir $destname, $mode || die "unable to mkdir $destname";
 				chown $uid, $gid, $destname;
 			}
-			push ( @excludepatterns , &rbuildstagepath( $masksref, $srch->{$srcname}{dir} , $path, $destname ));
-			utime(time, $mtime, $destname );
+			push(@excludepatterns, &rbuildstagepath($masksref, $srch->{$srcname}{dir}, $path, $destname));
+			utime(time, $mtime, $destname);
 
 		}
-		elsif ( $srch->{$srcname}{type} eq "l"  ) 
+		elsif ($srch->{$srcname}{type} eq "l")
 		{
 
 			# Need some special code here to handle copying or
@@ -468,6 +465,7 @@ sub rbuildstagepath
 			}
 			else
 			{
+
 				# deference symlink
 				my $target = $srch->{$srcname}{readlink};
 
@@ -487,20 +485,18 @@ sub rbuildstagepath
 	return @excludepatterns;
 }
 
-
-
 sub filtercontrolfiles
 {
-	my @newlist = @{$_[0]};
+	my @newlist        = @{$_[0]};
 	my $basenamefilter = $_[1];
-	my $srchref = $_[2];
+	my $srchref        = $_[2];
 
-	if ( defined($basenamefilter) )
+	if (defined($basenamefilter))
 	{
-		@newlist = grep /^$basenamefilter/, @newlist
+		@newlist = grep /^$basenamefilter/, @newlist;
 	}
 
-	@newlist  = sort @newlist;
+	@newlist = sort @newlist;
 	my @excludepatterns;
 
 	if ($verbose)
@@ -520,7 +516,7 @@ sub filtercontrolfiles
 		foreach $a (@alist)
 		{
 			nospin() unless $silent;
-			print BLUE ."  adding:$srchref->{$a}->{srcpath}" . RESET . "\n" unless $silent;
+			print BLUE . "add:$srchref->{$a}->{srcpath}" . ($srchref->{$a}->{type} eq "d" ? "/" : "") . RESET . "\n" unless $silent;
 			(my $basename = $a) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
@@ -532,7 +528,9 @@ sub filtercontrolfiles
 		foreach $d (@dlist)
 		{
 			nospin() unless $silent;
-			print MAGENTA . "deleting:$srchref->{$d}->{srcpath}" . RESET . "\n" unless $silent;
+
+			# bug on this next line. we want to test file type (is it a directory?) of control file target, not control file itself.
+			print MAGENTA . "del:$srchref->{$d}->{srcpath}" . ($srchref->{$d}->{type} eq "d" ? "/" : "") . RESET . "\n" unless $silent;
 			(my $basename = $d) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/, @newlist;
@@ -553,7 +551,7 @@ sub filtercontrolfiles
 			##$targetdir =~ s|\.\w[\w\-,]*\.a~$||;
 			##push(@excludepatterns, $targetdir . "/" . $basename);
 
-			push(@excludepatterns,  $basename);
+			push(@excludepatterns, $basename);
 		}
 	}
 
@@ -576,6 +574,7 @@ sub filtercontrolfiles
 		}
 		elsif ($f =~ /\.[ed]\~$/)
 		{
+
 			# must be other masks.
 			next;
 		}
@@ -587,9 +586,8 @@ sub filtercontrolfiles
 	@newlist = sort @newnewlist;
 
 	print "newlist is now " . (join ",", @newlist) . "\n" if $verbose;
-	return  (\@newlist, \@excludepatterns);
+	return (\@newlist, \@excludepatterns);
 }
-
 
 #
 #
@@ -640,12 +638,12 @@ sub deploy_rsync
 	$verbose .= " --verbose " unless ($report);
 
 	my $command = "$rsync $rsync_opts $dryrun $verbose --itemize-changes --compress --archive --delete --recursive --links --relative";
-	$command .= " --exclude-from=$excludepatternfile" if ( defined($excludepatternfile) );
-	$command .=" .$path $client:/";
+	$command .= " --exclude-from=$excludepatternfile" if (defined($excludepatternfile));
+	$command .= " .$path $client:/";
 
 	unless ($silent)
 	{
-		print($dryrun ? "running dry-run first for ". YELLOW . BOLD . "${client}:${path}" . RESET  " ...\n" : "running rsync for real for " . GREEN . BOLD . "${client}:${path}" . RESET . " ...\n");
+		print($dryrun ? "running dry-run first for " . YELLOW . BOLD . "${client}:${path}" . RESET " ...\n" : "running rsync for real for " . GREEN . BOLD . "${client}:${path}" . RESET . " ...\n");
 		print($dryrun ? BLACK ON_YELLOW BOLD: ON_GREEN BOLD);
 		print $command . "\n";
 		print RESET . ($dryrun ? BLACK ON_YELLOW: ON_GREEN);
@@ -686,7 +684,6 @@ sub deploy_rsync
 		}
 	}
 }
-
 
 #
 # &get( $client, $path)
@@ -729,50 +726,49 @@ sub get
 	# - no could overwrite contents of hard linked files?
 
 	my $command = "$rsync $rsync_opts --compress --itemize-changes --archive --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose";
-	$command .= " --exclude-from=$excludepatternfile" if ( defined($excludepatternfile) );
-	$command .=" $client:$path $stggettmp";
+	$command .= " --exclude-from=$excludepatternfile" if (defined($excludepatternfile));
+	$command .= " $client:$path $stggettmp";
 
 	print "collecting remote files...\n" . BOLD . BLACK . ON_YELLOW . $command . "\n" . RESET . BLACK . ON_YELLOW;
-	system $command; # todo check return code
+	system $command;    # todo check return code
 	print RESET . "\n";
 
-	if ( ! -e  $stggettmppath )
+	if (!-e $stggettmppath)
 	{
 		print BOLD . RED . ON_WHITE . "Error: nothing collected from $client:$path \nplease check that remote path contains no symlinks" . RESET . "\n";
 		return;
 	}
 
-
 	# full path search to determine repository original version...
 
-	my $ap = '';  # accumulated path 
-	my $pc;  # path component
-	my @pcs =  split "/", $path ;
-	shift @pcs ; # strip leading null before /(root directory.
+	my $ap = '';        # accumulated path
+	my $pc;             # path component
+	my @pcs = split "/", $path;
+	shift @pcs;         # strip leading null before /(root directory.
 
 	my $found = 'yes';
 
-	PATHLOOP: foreach $pc ( @pcs )
+      PATHLOOP: foreach $pc (@pcs)
 	{
 		my $tap = $ap . '/' . $pc;
 
 		# special code to check for basename.mask1,mask2.a~ files. grr.
-		
-		my %cfh; # control file hash
-		opendir(AP,$src . "/" . $ap) || die "could not open $ap \! \n";
+
+		my %cfh;    # control file hash
+		opendir(AP, $src . "/" . $ap) || die "could not open $ap \! \n";
 		my $nextfile;
-		while (defined ($nextfile = readdir(AP)))
+		while (defined($nextfile = readdir(AP)))
 		{
-			next if $nextfile !~ /^$pc/;
+			next                              if $nextfile !~ /^$pc/;
 			print "\nnextfile is $nextfile\n" if $verbose;
-			if ( $nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/ )
+			if ($nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/)
 			{
-				my @masks = split(",",$1);
-				my $type = $3;
-				
+				my @masks = split(",", $1);
+				my $type  = $3;
+
 				foreach my $mask (@masks)
 				{
-					if ( ! defined($cfh{$mask}{$type}) )
+					if (!defined($cfh{$mask}{$type}))
 					{
 						print "mask $mask type $type file $nextfile\n" if $verbose;
 						$cfh{$mask}{$type} = $nextfile;
@@ -798,59 +794,60 @@ sub get
 		#	}
 		#}
 
-		
 		##
-		## BUG. all these -e tests below fail on symlinks when 
-		## the symlink target does not exist on the jlsync 
-		## repository machine 
-		## symlinks can be the last path component 
-		## the last path component 
+		## BUG. all these -e tests below fail on symlinks when
+		## the symlink target does not exist on the jlsync
+		## repository machine
+		## symlinks can be the last path component
+		## the last path component
 		##
 		##
-		
 
-		foreach my $tmask ( reverse @{$maskshash{$client}} )
+		foreach my $tmask (reverse @{$maskshash{$client}})
 		{
-			if ( -e "${src}/${tap}.${tmask}.a~" )	
+			if (-e "${src}/${tap}.${tmask}.a~")
 			{
+
 				# this is the path to remember
 				$ap = $tap . ".${tmask}.a~";
 				next PATHLOOP;
 			}
-			elsif ( -e "${src}/${tap}.${tmask}.d~" )
+			elsif (-e "${src}/${tap}.${tmask}.d~")
 			{
-				# warning/error target is current masked by ~d 
-				print  YELLOW . ON_WHITE . "WARNING: --get target pathname is masked by control file ${src}/${tap}.${tmask}.d~" . RESET . "\n";
+
+				# warning/error target is current masked by ~d
+				print YELLOW . ON_WHITE . "WARNING: --get target pathname is masked by control file ${src}/${tap}.${tmask}.d~" . RESET . "\n";
 
 			}
-			elsif ( -e "${src}/${tap}.${tmask}.e~" )
+			elsif (-e "${src}/${tap}.${tmask}.e~")
 			{
+
 				# warning/error target is current masked by ~e ( rsync get probably won't work )
-				print  YELLOW . ON_WHITE . "WARNING: --get target pathname is masked by control file ${src}/${tap}.${tmask}.e~" .  "\n".
-						"WARNING: rsync probably won't work" . RESET . "\n";
+				print YELLOW . ON_WHITE . "WARNING: --get target pathname is masked by control file ${src}/${tap}.${tmask}.e~" . "\n" . "WARNING: rsync probably won't work" . RESET . "\n";
 
 			}
 		}
 
 		# else DEFAULT files without any mask
-		if ( -e "${src}/${tap}" )
+		if (-e "${src}/${tap}")
 		{
+
 			# this is the path to remember
 			$ap = $tap;
 		}
 		else
 		{
+
 			# path not found in repository.
 			$found = 'no';
 			last PATHLOOP;
 		}
 	}
 
-	print "Accumlated path is $ap\n" if $verbose;
+	print "Accumlated path is $ap\n"                                      if $verbose;
 	print "Was the target path found in the source repository?: $found\n" if $verbose;
 
 	my $srcap = $src . $ap;
-	
 
 	# maybe need to add check if a directory is being replaced with a file.
 	# decide what to do, then...
@@ -860,12 +857,12 @@ sub get
 	my $possiblesource2;
 	my $possiblesource;
 
-	if ( $found eq 'yes' )
+	if ($found eq 'yes')
 	{
-		print "current source repository ( $src ) version...\n"; 
+		print "current source repository ( $src ) version...\n";
 		my $confirmed = '';
 
-		if ( -f $srcap )
+		if (-f $srcap)
 		{
 			if ((stat($stgget))[1] == (stat("$srcap"))[1])
 			{
@@ -883,13 +880,12 @@ sub get
 			$nfiles =~ s/\D//g;
 			$nfiles = "( number of files: $nfiles )";
 		}
-		print ON_WHITE .  BLUE . "$srcap $confirmed $nfiles" . RESET . "\n";
+		print ON_WHITE . BLUE . "$srcap $confirmed $nfiles" . RESET . "\n";
 		chdir dirname($srcap);
 		print GREEN;
 		system "ls", "-ld", basename($srcap);
 		print RESET;
 	}
-
 
 	if (-e $stgget)
 	{
@@ -908,7 +904,7 @@ sub get
 		print RESET;
 	}
 
-	if (-e $target && ($target ne $srcap ))
+	if (-e $target && ($target ne $srcap))
 	{
 		print "current repository target version is\n";
 		my $nfiles = "";
@@ -927,12 +923,12 @@ sub get
 
 	print "remote ( $stggettmp ) version just got is...\n";
 	my $nfiles = "";
-        if (-d $stggettmppath)
-        {
-                $nfiles = `find $stggettmp -print | wc -l`; 
+	if (-d $stggettmppath)
+	{
+		$nfiles = `find $stggettmp -print | wc -l`;
 		$nfiles =~ s/\D//g;
 		$nfiles = "( number of files: $nfiles )";
-        }
+	}
 
 	print ON_WHITE . BLUE . "$stggettmppath $nfiles" . RESET . "\n";
 	chdir dirname($stggettmppath);
@@ -996,11 +992,7 @@ sub nospin
 	$spinpos = 0;
 }
 
-
-
-
 ###################### MANPAGE ########################################
-
 
 =head1 NAME
 
