@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.68 2005/10/16 20:55:09 plastic Exp $
+# $Id: jlsync,v 1.69 2005/10/23 20:51:09 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -124,6 +124,7 @@ $ENV{'ANSI_COLORS_DISABLED'} = 'nocolor' if ($nocolor);
 my $excludepatternfile;
 
 my %maskshash;
+my %hostshash;
 open(MASK, $config) || die "can not open $config";
 while (<MASK>)
 {
@@ -140,6 +141,10 @@ while (<MASK>)
 		else
 		{
 			$maskshash{$tmasks[$#tmasks]} = \@tmasks;
+			foreach my $mask ( @tmasks )
+			{
+				push  @{$hostshash{$#tmasks}}, $mask;
+			}
 		}
 	}
 }
@@ -147,7 +152,37 @@ close MASK;
 
 foreach $client (keys %cph)
 {
-	unless (defined $maskshash{$client})
+	if ( $client =~ /^=(.*)/ )  #
+	{
+		my @masks = split /=/,$1;
+		foreach my $mask (@masks)
+		{
+			unless ( defined $hostshash{$mask} )
+			{
+				print "$mask not found in file $config. exiting.\n";
+				exit 1;
+			}
+		}
+
+		my $firstmask = shift @masks;
+		my %finallist = map { $_ => 1 } $hostshash{$firstmask};
+		foreach my $nextmask ( @masks )
+		{
+			foreach my $host ( keys %finallist )
+			{
+				unless (grep /^$host$/, $hostshash{$nextmask} )
+				{	
+					delete $finallist{$host};
+				}
+			}
+		}
+
+		print "for $client finallist is " . join  " ",(keys %finallist)  . "\n";
+
+		# now correct %cph
+
+	}
+	elsif ( ! defined $maskshash{$client})
 	{
 		print "$client not found in file $config. exiting.\n";
 		exit 1;
