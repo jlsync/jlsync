@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.70 2005/10/24 12:26:17 plastic Exp $
+# $Id: jlsync,v 1.71 2005/10/24 21:10:09 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -178,10 +178,16 @@ foreach $client (keys %cph)
 			}
 		}
 
-		print "for $client finallist is " . (join  " ",(keys %finallist))  . "\n";
 
-		# now correct %cph
+		print "for client $client finallist of matching hosts is " . (join  " ",(keys %finallist))  . "\n"  if $verbose;
 
+		# now update %cph
+		my $path = $cph{$client};
+		delete $cph{$client};
+		foreach my $host (keys %finallist)
+		{
+			$cph{$host} = $path;	
+		}
 	}
 	elsif ( ! defined $maskshash{$client})
 	{
@@ -1258,12 +1264,34 @@ and
 
 =head2 Advanced command line with multiple hosts
 
-When mutiple host:/path options are listed on the command line and the 
-/path compontents are identical the host parts can be combined by 
-using commas as a separater. e.g.
+When the same path needs to be jlsynced to multiple hosts those hosts 
+can given as a single comma separated list prior to the path. e.g.
 
 	jlsync sol01,sol02,sol03,sol04,sol05,sol06,sol07:/opt/csw
 
+=head2 Advanced command line with matching template/mask names
+
+The =templatename:/path notation can be used to match all hosts that 
+"subscribe" to that templatename in the jlsync.config file. For example 
+to select all hosts that have the SOLARIS template listed in as part 
+configuration in jlsync.config the following could be used.
+
+	jlsync =SOLARIS:/etc/nscd.conf
+
+And because all hosts must subscribe to the DEFAULT template the 
+following will jlsync to all configured hosts
+
+	jlsync =DEFAULT:/etc/issue
+
+It's possible to get the intersection of muliple templates by chaining them 
+together. For example the following would match all production debian hosts in newyork
+
+	jlsync =PROD=DEBIAN=newyork:/usr/local/etc/timezone
+
+To get the union of multiple templates you can separate them by commas. 
+e.g. All hosts in London and Melbourne
+	
+	jlsync =LONDON,=MELBOURNE:/etc/passwd =LONDON,=MELBOURNE:/etc/shadow
 
 =head1 REPORT OPTION
 
