@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.69 2005/10/23 20:51:09 plastic Exp $
+# $Id: jlsync,v 1.70 2005/10/24 12:26:17 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -143,7 +143,7 @@ while (<MASK>)
 			$maskshash{$tmasks[$#tmasks]} = \@tmasks;
 			foreach my $mask ( @tmasks )
 			{
-				push  @{$hostshash{$#tmasks}}, $mask;
+				push  @{$hostshash{$mask}}, $tmasks[$#tmasks];
 			}
 		}
 	}
@@ -165,19 +165,20 @@ foreach $client (keys %cph)
 		}
 
 		my $firstmask = shift @masks;
-		my %finallist = map { $_ => 1 } $hostshash{$firstmask};
+		my %finallist = map { ( $_ , 1) } @{$hostshash{$firstmask}};
 		foreach my $nextmask ( @masks )
 		{
+			print "for $client finallist is now " . (join  " ",(keys %finallist))  . "\n";
 			foreach my $host ( keys %finallist )
 			{
-				unless (grep /^$host$/, $hostshash{$nextmask} )
+				unless (grep /^$host$/, @{$hostshash{$nextmask}} )
 				{	
 					delete $finallist{$host};
 				}
 			}
 		}
 
-		print "for $client finallist is " . join  " ",(keys %finallist)  . "\n";
+		print "for $client finallist is " . (join  " ",(keys %finallist))  . "\n";
 
 		# now correct %cph
 
