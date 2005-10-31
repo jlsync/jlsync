@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.72 2005/10/31 14:54:35 plastic Exp $
+# $Id: jlsync,v 1.73 2005/10/31 21:21:38 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -141,9 +141,9 @@ while (<MASK>)
 		else
 		{
 			$maskshash{$tmasks[$#tmasks]} = \@tmasks;
-			foreach my $mask ( @tmasks )
+			foreach my $mask (@tmasks)
 			{
-				push  @{$hostshash{$mask}}, $tmasks[$#tmasks];
+				push @{$hostshash{$mask}}, $tmasks[$#tmasks];
 			}
 		}
 	}
@@ -152,12 +152,12 @@ close MASK;
 
 foreach $client (keys %cph)
 {
-	if ( $client =~ /^=(.*)/ )  #
+	if ($client =~ /^=(.*)/)    #
 	{
-		my @masks = split /=/,$1;
+		my @masks = split /=/, $1;
 		foreach my $mask (@masks)
 		{
-			unless ( defined $hostshash{$mask} )
+			unless (defined $hostshash{$mask})
 			{
 				print "$mask not found in file $config. exiting.\n";
 				exit 1;
@@ -165,31 +165,30 @@ foreach $client (keys %cph)
 		}
 
 		my $firstmask = shift @masks;
-		my %finallist = map { ( $_ , 1) } @{$hostshash{$firstmask}};
-		foreach my $nextmask ( @masks )
+		my %finallist = map { ($_, 1) } @{$hostshash{$firstmask}};
+		foreach my $nextmask (@masks)
 		{
-			print "updated $client finallist is now " . (join  " ",(keys %finallist))  . "\n" if $verbose;
-			foreach my $host ( keys %finallist )
+			print "updated $client finallist is now " . (join " ", (keys %finallist)) . "\n" if $verbose;
+			foreach my $host (keys %finallist)
 			{
-				unless (grep /^$host$/, @{$hostshash{$nextmask}} )
-				{	
+				unless (grep /^$host$/, @{$hostshash{$nextmask}})
+				{
 					delete $finallist{$host};
 				}
 			}
 		}
 
-
-		print "for client $client finallist of matching hosts is " . (join  " ",(keys %finallist))  . "\n"  if $verbose;
+		print "for client $client finallist of matching hosts is " . (join " ", (keys %finallist)) . "\n" if $verbose;
 
 		# now update %cph
 		my $path = $cph{$client};
 		delete $cph{$client};
 		foreach my $host (keys %finallist)
 		{
-			$cph{$host} = $path;	
+			$cph{$host} = $path;
 		}
 	}
-	elsif ( ! defined $maskshash{$client})
+	elsif (!defined $maskshash{$client})
 	{
 		print "$client not found in file $config. exiting.\n";
 		exit 1;
@@ -557,6 +556,7 @@ sub filtercontrolfiles
 		foreach $a (@alist)
 		{
 			nospin() unless $silent;
+
 			# TODO : add symlink add/print case below
 			print GREEN . "add:$srchref->{$a}->{srcpath}" . ($srchref->{$a}->{type} eq "d" ? "/" : "") . RESET . "\n" unless $silent;
 			(my $basename = $a) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$//;
