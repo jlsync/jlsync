@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.73 2005/10/31 21:21:38 plastic Exp $
+# $Id: jlsync,v 1.74 2005/10/31 21:45:33 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -123,27 +123,28 @@ $ENV{'ANSI_COLORS_DISABLED'} = 'nocolor' if ($nocolor);
 
 my $excludepatternfile;
 
-my %maskshash;
-my %hostshash;
+my %masks_of;
+my %hosts_with;
 open(MASK, $config) || die "can not open $config";
 while (<MASK>)
 {
 	next if /^#/;
 	s/\s+$//;
 	my @tmasks = split(/\s+/);
+	my $this_host = $tmasks[$#tmasks];  # host is last mask on line
 	if ($tmasks[0] eq 'DEFAULT')
 	{
-		if (defined $maskshash{$tmasks[$#tmasks]})
+		if (defined $masks_of{$this_host})
 		{
-			print BOLD . RED . "Error: duplicate entires for $tmasks[$#tmasks] is file $config . exiting." . RESET . "\n";
+			print BOLD . RED . "Error: duplicate entires for $this_host is file $config . exiting." . RESET . "\n";
 			exit 1;
 		}
 		else
 		{
-			$maskshash{$tmasks[$#tmasks]} = \@tmasks;
+			$masks_of{$this_host} = \@tmasks;
 			foreach my $mask (@tmasks)
 			{
-				push @{$hostshash{$mask}}, $tmasks[$#tmasks];
+				push @{$hosts_with{$mask}}, $this_host;
 			}
 		}
 	}
@@ -152,43 +153,43 @@ close MASK;
 
 foreach $client (keys %cph)
 {
-	if ($client =~ /^=(.*)/)    #
+	if ($client =~ /^=(.*)/)    # leading = is stripped off here
 	{
-		my @masks = split /=/, $1;
-		foreach my $mask (@masks)
+		my @intersect_masks = split /=/, $1;
+		foreach my $mask (@intersect_masks)
 		{
-			unless (defined $hostshash{$mask})
+			unless (defined $hosts_with{$mask})
 			{
 				print "$mask not found in file $config. exiting.\n";
 				exit 1;
 			}
 		}
 
-		my $firstmask = shift @masks;
-		my %finallist = map { ($_, 1) } @{$hostshash{$firstmask}};
-		foreach my $nextmask (@masks)
+		my $firstmask = shift @intersect_masks;
+		my %intersection = map { ($_, 1) } @{$hosts_with{$firstmask}};
+		foreach $mask (@intersect_masks)
 		{
-			print "updated $client finallist is now " . (join " ", (keys %finallist)) . "\n" if $verbose;
-			foreach my $host (keys %finallist)
+			print "updated $client intersection is now " . (join " ", (keys %intersection)) . "\n" if $verbose;
+			foreach my $host (keys %intersection)
 			{
-				unless (grep /^$host$/, @{$hostshash{$nextmask}})
+				unless (grep /^$host$/, @{$hosts_with{$mask}})
 				{
-					delete $finallist{$host};
+					delete $intersection{$host};
 				}
 			}
 		}
 
-		print "for client $client finallist of matching hosts is " . (join " ", (keys %finallist)) . "\n" if $verbose;
+		print "for client $client intersection of matching hosts is " . (join " ", (keys %intersection)) . "\n" if $verbose;
 
 		# now update %cph
 		my $path = $cph{$client};
 		delete $cph{$client};
-		foreach my $host (keys %finallist)
+		foreach my $host (keys %intersection)
 		{
 			$cph{$host} = $path;
 		}
 	}
-	elsif (!defined $maskshash{$client})
+	elsif (!defined $masks_of{$client})
 	{
 		print "$client not found in file $config. exiting.\n";
 		exit 1;
@@ -390,7 +391,7 @@ sub usage
 sub buildstageclient
 {
 	my $client = $_[0];
-	@masks = @{$maskshash{$client}};    # @masks is a global var
+	@masks = @{$mask_of{$client}};    # @masks is a global var
 
 	print "masks are " . BLUE . BOLD . join(" ", @masks) . RESET . ".\n" unless $silent;
 
@@ -420,7 +421,7 @@ sub buildstagepath
 
 	$path =~ s|^/||;
 
-	my @excludepatterns = &rbuildstagepath($maskshash{$client}, \%srch, $path, "$stg/$client");
+	my @excludepatterns = &rbuildstagepath($mask_of{$client}, \%srch, $path, "$stg/$client");
 	my $stgclient = "$stg/$client";
 	@excludepatterns = map { $_ =~ s|^\Q$stgclient||; $_ } @excludepatterns;
 	return @excludepatterns;
@@ -757,7 +758,7 @@ sub get
 	}
 	else
 	{
-		if (!grep(/^\Q$cgetmask\E$/, @{$maskshash{$client}}))
+		if (!grep(/^\Q$cgetmask\E$/, @{$mask_of{$client}}))
 		{
 			print BOLD . BLACK . ON_YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
 		}
@@ -845,7 +846,7 @@ sub get
 		##
 		##
 
-		foreach my $tmask (reverse @{$maskshash{$client}})
+		foreach my $tmask (reverse @{$mask_of{$client}})
 		{
 			if (-e "${src}/${tap}.${tmask}.a~")
 			{
