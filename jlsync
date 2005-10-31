@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.71 2005/10/24 21:10:09 plastic Exp $
+# $Id: jlsync,v 1.72 2005/10/31 14:54:35 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -168,7 +168,7 @@ foreach $client (keys %cph)
 		my %finallist = map { ( $_ , 1) } @{$hostshash{$firstmask}};
 		foreach my $nextmask ( @masks )
 		{
-			print "for $client finallist is now " . (join  " ",(keys %finallist))  . "\n";
+			print "updated $client finallist is now " . (join  " ",(keys %finallist))  . "\n" if $verbose;
 			foreach my $host ( keys %finallist )
 			{
 				unless (grep /^$host$/, @{$hostshash{$nextmask}} )
@@ -393,7 +393,7 @@ sub buildstageclient
 	my $client = $_[0];
 	@masks = @{$maskshash{$client}};    # @masks is a global var
 
-	print "masks are " . RED . BOLD . join(" ", @masks) . RESET . ".\n" unless $silent;
+	print "masks are " . BLUE . BOLD . join(" ", @masks) . RESET . ".\n" unless $silent;
 
 	my $stgclient = "$stg/$client";
 	print "deleting old image for $client in $stgclient ... " unless $silent;
@@ -411,7 +411,6 @@ sub buildstageclient
 	utime(time, (stat($src))[9], $stgclient);
 
 	nospin()                                                    unless $silent;
-	print "done.\n"                                             unless $silent;
 	print "done building new image for $client in $stgclient\n" unless $silent;
 }
 
@@ -558,7 +557,8 @@ sub filtercontrolfiles
 		foreach $a (@alist)
 		{
 			nospin() unless $silent;
-			print BLUE . "add:$srchref->{$a}->{srcpath}" . ($srchref->{$a}->{type} eq "d" ? "/" : "") . RESET . "\n" unless $silent;
+			# TODO : add symlink add/print case below
+			print GREEN . "add:$srchref->{$a}->{srcpath}" . ($srchref->{$a}->{type} eq "d" ? "/" : "") . RESET . "\n" unless $silent;
 			(my $basename = $a) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
@@ -572,7 +572,7 @@ sub filtercontrolfiles
 			nospin() unless $silent;
 
 			# bug on this next line. we want to test file type (is it a directory?) of control file target, not control file itself.
-			print MAGENTA . "del:$srchref->{$d}->{srcpath}" . ($srchref->{$d}->{type} eq "d" ? "/" : "") . RESET . "\n" unless $silent;
+			print RED . "del:$srchref->{$d}->{srcpath}" . ($srchref->{$d}->{type} eq "d" ? "/" : "") . RESET . "\n" unless $silent;
 			(my $basename = $d) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$//;
 			@newlist = grep !/^\Q$basename\E$/, @newlist;
 			@newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/, @newlist;
@@ -685,7 +685,7 @@ sub deploy_rsync
 
 	unless ($silent)
 	{
-		print($dryrun ? "running dry-run first for " . YELLOW . BOLD . "${client}:${path}" . RESET " ...\n" : "running rsync for real for " . GREEN . BOLD . "${client}:${path}" . RESET . " ...\n");
+		print($dryrun ? "running dry-run for " . YELLOW . ON_BLACK . "${client}:${path}" . RESET " ...\n" : "running rsync for real for " . GREEN . BOLD . "${client}:${path}" . RESET . " ...\n");
 		print($dryrun ? BLACK ON_YELLOW BOLD: ON_GREEN BOLD);
 		print $command . "\n";
 		print RESET . ($dryrun ? BLACK ON_YELLOW: ON_GREEN);
