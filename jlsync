@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.74 2005/10/31 21:45:33 plastic Exp $
+# $Id: jlsync,v 1.75 2005/11/01 10:24:04 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -391,7 +391,7 @@ sub usage
 sub buildstageclient
 {
 	my $client = $_[0];
-	@masks = @{$mask_of{$client}};    # @masks is a global var
+	@masks = @{$masks_of{$client}};    # @masks is a global var
 
 	print "masks are " . BLUE . BOLD . join(" ", @masks) . RESET . ".\n" unless $silent;
 
@@ -421,7 +421,7 @@ sub buildstagepath
 
 	$path =~ s|^/||;
 
-	my @excludepatterns = &rbuildstagepath($mask_of{$client}, \%srch, $path, "$stg/$client");
+	my @excludepatterns = &rbuildstagepath($masks_of{$client}, \%srch, $path, "$stg/$client");
 	my $stgclient = "$stg/$client";
 	@excludepatterns = map { $_ =~ s|^\Q$stgclient||; $_ } @excludepatterns;
 	return @excludepatterns;
@@ -758,7 +758,7 @@ sub get
 	}
 	else
 	{
-		if (!grep(/^\Q$cgetmask\E$/, @{$mask_of{$client}}))
+		if (!grep(/^\Q$cgetmask\E$/, @{$masks_of{$client}}))
 		{
 			print BOLD . BLACK . ON_YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
 		}
@@ -846,7 +846,7 @@ sub get
 		##
 		##
 
-		foreach my $tmask (reverse @{$mask_of{$client}})
+		foreach my $tmask (reverse @{$masks_of{$client}})
 		{
 			if (-e "${src}/${tap}.${tmask}.a~")
 			{
