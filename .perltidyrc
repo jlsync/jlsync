@@ -1,5 +1,5 @@
 #
--l=78		# max line width is 78 cols
+-l=200		# max line width is 78 cols
 -i=4	    # indent level 4 cols
 -ci=4	    # continuation indent is 4 cols
 #-st    	# output to stdout
