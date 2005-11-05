@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.78 2005/11/05 21:13:07 plastic Exp $
+# $Id: jlsync,v 1.79 2005/11/05 22:24:31 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -121,18 +121,18 @@ foreach my $arg (@ARGV)
 }
 
 my $dryrun = $real ? "" : "--dry-run";
-$ENV{'ANSI_COLORS_DISABLED'} = 'nocolor' if ($nocolor);
+if ($nocolor) { $ENV{'ANSI_COLORS_DISABLED'} = 'nocolor'; }
 
 my $excludepatternfile;
-
 my %masks_of;
 my %hosts_with;
-open( MASK, $config ) || die "can not open $config";
-while (<MASK>)
+
+open( CONFIG, $config ) || die "can not open $config";
+while (my $config_line = <CONFIG>)
 {
-    next if /^#/;
-    s/\s+$//;
-    my @tmasks    = split(/\s+/);
+    next if $config_line =~ /^#/;
+    $config_line =~ s/\s+$//;
+    my @tmasks    = split(/\s+/,$config_line);
     my $this_host = $tmasks[-1];    # host is last mask on line
     if ( $tmasks[0] eq 'DEFAULT' )
     {
@@ -151,7 +151,7 @@ while (<MASK>)
         }
     }
 }
-close MASK;
+close CONFIG;
 
 foreach $client ( keys %cph )
 {
@@ -171,8 +171,7 @@ foreach $client ( keys %cph )
         my %intersection = map { ( $_, 1 ) } @{ $hosts_with{$firstmask} };
         foreach $mask (@intersect_masks)
         {
-            print "updated $client intersection is now " . ( join " ", ( keys %intersection ) ) . "\n"
-                if $verbose;
+            print "updated $client intersection is now " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
             foreach my $host ( keys %intersection )
             {
                 unless ( grep /^$host$/, @{ $hosts_with{$mask} } )
@@ -182,8 +181,7 @@ foreach $client ( keys %cph )
             }
         }
 
-        print "for client $client intersection of matching hosts is " . ( join " ", ( keys %intersection ) ) . "\n"
-            if $verbose;
+        print "for client $client intersection of matching hosts is " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
 
         # now update %cph
         my $path = $cph{$client};
@@ -251,8 +249,7 @@ foreach $client ( keys %cph )
         }
         else
         {
-            print "there are no exclude patterns for " . CYAN . BOLD . $client . ":" . $path . RESET . "\n"
-                unless $silent;
+            print "there are no exclude patterns for " . CYAN . BOLD . $client . ":" . $path . RESET . "\n" unless $silent;
             undef $excludepatternfile;
         }
 
@@ -265,7 +262,10 @@ foreach $client ( keys %cph )
             &deploy( $client, $path );
         }
 
-        unlink $excludepatternfile if ( defined($excludepatternfile) );
+        if ( defined($excludepatternfile) )
+        {
+            unlink $excludepatternfile;
+        }
     }
 }
 
@@ -410,8 +410,7 @@ sub buildstageclient
     utime( time, ( stat($src) )[9], $stgclient );
 
     nospin() unless $silent;
-    print "done building new image for $client in $stgclient\n"
-        unless $silent;
+    print "done building new image for $client in $stgclient\n" unless $silent;
 }
 
 sub buildstagepath
@@ -562,8 +561,7 @@ sub filtercontrolfiles
             nospin() unless $silent;
 
             # TODO : add symlink add/print case below
-            print GREEN . "add:$srchref->{$a}->{srcpath}" . ( $srchref->{$a}->{type} eq "d" ? "/" : "" ) . RESET . "\n"
-                unless $silent;
+            print GREEN . "add:$srchref->{$a}->{srcpath}" . ( $srchref->{$a}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
             ( my $basename = $a ) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$//;
             @newlist = grep !/^\Q$basename\E$/, @newlist;
             @newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
@@ -577,8 +575,7 @@ sub filtercontrolfiles
             nospin() unless $silent;
 
             # bug on this next line. we want to test file type (is it a directory?) of control file target, not control file itself.
-            print RED . "del:$srchref->{$d}->{srcpath}" . ( $srchref->{$d}->{type} eq "d" ? "/" : "" ) . RESET . "\n"
-                unless $silent;
+            print RED . "del:$srchref->{$d}->{srcpath}" . ( $srchref->{$d}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
             ( my $basename = $d ) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$//;
             @newlist = grep !/^\Q$basename\E$/, @newlist;
             @newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/, @newlist;
@@ -604,35 +601,34 @@ sub filtercontrolfiles
     }
 
     # strip out any remaining control files for other non-matched masks while preserving .a~ files.
-    my $f;
     my @newnewlist = ();
-    foreach $f (@newlist)
+    FILE: 
+    foreach my $file (@newlist)
     {
-        if ( $f =~ /\.(\w[\w\-\,]*)\.a\~$/ )    # need to fix this to properly identifiy .MASK1,MASK2,MASK3.a~ and $1 $2 $3 etc.
+        if ( $file =~ /\.(\w[\w\-\,]*)\.a\~$/ )   
         {
-            my @ms = split( ",", $1 );
-            foreach my $m (@ms)
+            my @file_masks = split( ",", $1 );
+            foreach my $fm (@file_masks)
             {
-                if ( grep /^$m$/, @masks )
+                if ( grep /^$fm$/, @masks )
                 {
-                    push( @newnewlist, $f );
-                    last;
+                    push( @newnewlist, $file );
+                    last FILE;
                 }
             }
         }
-        elsif ( $f =~ /\.[ed]\~$/ )
+        elsif ( $file =~ /\.[ed]\~$/ )
         {
-
             # must be other masks.
-            next;
+            next FILE;
         }
         else
         {
-            push( @newnewlist, $f );
+            push( @newnewlist, $file );
         }
     }
-    @newlist = sort @newnewlist;
 
+    @newlist = sort @newnewlist;
     print "newlist is now " . ( join ",", @newlist ) . "\n" if $verbose;
     return ( \@newlist, \@excludepatterns );
 }
@@ -810,9 +806,9 @@ PATHLOOP: foreach $pc (@pcs)
         my %cfh;        # control file hash
         opendir( AP, $src . "/" . $ap ) || die "could not open $ap \! \n";
         my $nextfile;
-        while ( defined( $nextfile = readdir(AP) ) )
+        DIRLOOP: while ( defined( $nextfile = readdir(AP) ) )
         {
-            next                              if $nextfile !~ /^$pc/;
+            next DIRLOOP if $nextfile !~ /^$pc/;
             print "\nnextfile is $nextfile\n" if $verbose;
             if ( $nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/ )
             {
@@ -837,16 +833,6 @@ PATHLOOP: foreach $pc (@pcs)
             }
         }
         closedir(AP);
-
-        #foreach my $mft (sort keys %cfh)
-        #{
-        #	print "mask $mft ";
-        #	foreach my $tft ( keys %{$cfh{$mft}} )
-        #	{
-        #		print "type $tft ";
-        #		print "file $cfh{$mft}{$tft}\n";
-        #	}
-        #}
 
         ##
         ## BUG. all these -e tests below fail on symlinks when
@@ -891,7 +877,6 @@ PATHLOOP: foreach $pc (@pcs)
         }
         else
         {
-
             # path not found in repository.
             $found = 'no';
             last PATHLOOP;
