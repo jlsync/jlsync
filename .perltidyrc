@@ -1,10 +1,20 @@
 #
-#
--i=8 		# indent 8 spaces
--et=8  		# for each 8 spaces use a tab (ie. use tabs for indentation)
--bt=2 		# tight braces {}
--pt=2 		# tight parenthases ()
+-l=78		# max line width is 78 cols
+-i=4	    # indent level 4 cols
+-ci=4	    # continuation indent is 4 cols
+#-st    	# output to stdout
+-se	        # errors to std err
+-vt=2	    # maximal vertical tightness
+-pt=1 		# medium tight parenthases ()
+-bt=1 		# medium tight braces {}
+-sbt=1 		# medium square tight braces []
+-bbt=1 		# medium block tight braces 
+-nsfs		# no space before semicolons
+-nolq		# don't outdent long quoted strings
 -bl 	 	# start new blocks with { on left   
 -lp 		# list indentation, line up parameters
 -cti=1 		# align closing bracket below openening bracket
--l=2000 	# line lengh 2000 chars
+-wbb="% + - * / x != == >= <= =~ < > | & >= < = **= += *= &= &&= -= /= |= >>= ||= .= %= ^= x="
+#
+#
+#
