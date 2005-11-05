@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.76 2005/11/05 19:32:36 plastic Exp $
+# $Id: jlsync,v 1.77 2005/11/05 21:10:28 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -32,7 +32,7 @@ my $config = $jlsyncdir . "/etc/jlsync.config";
 my $smtpserver = '127.0.0.1';
 
 # not all filesystems are created equal. leave this set to 0
-my $abletolinktosymlinks = 0;    # linux = 1 , solaris = 0 ;
+my $able_to_link_to_symlinks = 0;    # linux = 1 , solaris = 0 ;
 
 #################### END OF CONFIGURATION SECTION ###########################
 
@@ -134,7 +134,7 @@ while (<MASK>)
     next if /^#/;
     s/\s+$//;
     my @tmasks    = split(/\s+/);
-    my $this_host = $tmasks[$#tmasks];    # host is last mask on line
+    my $this_host = $tmasks[-1];    # host is last mask on line
     if ( $tmasks[0] eq 'DEFAULT' )
     {
         if ( defined $masks_of{$this_host} )
@@ -235,12 +235,6 @@ foreach $client ( keys %cph )
     &buildstageclient($client);
 }
 
-#foreach $client (keys %cph)
-#{
-#	@excludepatterns = ();
-#	&buildstage($client);
-#	@{$cph{$client}->{excludepatterns}} = @excludepatterns;
-#}
 
 foreach $client ( keys %cph )
 {
@@ -543,7 +537,7 @@ sub rbuildstagepath
             # hardlink of relative symlinks
 
             print "$srcname is a symlink\n" if $verbose;
-            if ($abletolinktosymlinks)
+            if ($able_to_link_to_symlinks)
             {
                 link( $srch->{$srcname}{srcpath}, $destname )
                     || die
@@ -1145,11 +1139,13 @@ client hosts
 
 =head1 SYNOPSIS
 
-    jlsync [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout [clienthostname2:/another/path2/pushout]
+    jlsync [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout 
+                [clienthostname2:/another/path2/pushout]
 
     jlsync --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
 
-    jlsync --report [--email=address] clienthostname:/path/to/check [clienthostname2:/another/path2/check]
+    jlsync --report [--email=address] clienthostname:/path/to/check 
+                [clienthostname2:/another/path2/check]
 
 =head1 DESCRIPTION
 
