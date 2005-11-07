@@ -6,7 +6,7 @@
 #
 # Copyright © 2002-2005   Jason Lee Pty. Ltd.
 #
-# $Id: jlsync,v 1.79 2005/11/05 22:24:31 plastic Exp $
+# $Id: jlsync,v 1.80 2005/11/07 18:37:05 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -602,7 +602,6 @@ sub filtercontrolfiles
 
     # strip out any remaining control files for other non-matched masks while preserving .a~ files.
     my @newnewlist = ();
-    FILE: 
     foreach my $file (@newlist)
     {
         if ( $file =~ /\.(\w[\w\-\,]*)\.a\~$/ )   
@@ -613,14 +612,14 @@ sub filtercontrolfiles
                 if ( grep /^$fm$/, @masks )
                 {
                     push( @newnewlist, $file );
-                    last FILE;
+                    last;
                 }
             }
         }
         elsif ( $file =~ /\.[ed]\~$/ )
         {
             # must be other masks.
-            next FILE;
+            next;
         }
         else
         {
@@ -806,9 +805,9 @@ PATHLOOP: foreach $pc (@pcs)
         my %cfh;        # control file hash
         opendir( AP, $src . "/" . $ap ) || die "could not open $ap \! \n";
         my $nextfile;
-        DIRLOOP: while ( defined( $nextfile = readdir(AP) ) )
+        while ( defined( $nextfile = readdir(AP) ) )
         {
-            next DIRLOOP if $nextfile !~ /^$pc/;
+            next if $nextfile !~ /^$pc/;
             print "\nnextfile is $nextfile\n" if $verbose;
             if ( $nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/ )
             {
