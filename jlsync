@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.81 2005/11/08 18:50:17 plastic Exp $
+# $Id: jlsync,v 1.82 2005/11/08 19:13:55 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -65,6 +65,10 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 *name = *File::Find::name;
 *dir  = *File::Find::dir;
 
+my $VERSION;
+($VERSION = '$Revision: 1.82 $ ') =~ s/[^0-9.]//g;
+
+
 my $reportfrom = 'jlsync report <root>';
 
 my @controlfiles = ();    # array of control file hashes.
@@ -82,6 +86,7 @@ my %cph;                  # Client Path Hash
 my $client;
 my $path;
 my $verbose;
+my $version;
 my $report;
 my $email;
 my $silent;
@@ -94,6 +99,7 @@ my $unjlsyncronized = 0;
 
 GetOptions( "real"             => \$real,       # --real
             "get"              => \$get,        # --get
+            "version"          => \$version,    # --version
             "verbose"          => \$verbose,    # --verbose
             "report"           => \$report,     # --report
             "email|mail=s"     => \$email,      # --email=address
@@ -101,6 +107,12 @@ GetOptions( "real"             => \$real,       # --real
             "mask=s"           => \$getmask,    # --mask=MASKNAME
             "silent"           => \$silent,     # --silent available on commandline for testing
           ) || &usage;
+
+if ($version)
+{
+    print "jlsync version $VERSION\n";
+    exit 0;
+}
 
 &usage unless ( defined $ARGV[0] );
 
