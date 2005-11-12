@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.83 2005/11/12 20:43:27 plastic Exp $
+# $Id: jlsync,v 1.84 2005/11/12 20:59:45 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -66,7 +66,7 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 *dir  = *File::Find::dir;
 
 my $VERSION;
-($VERSION = '$Revision: 1.83 $ ') =~ s/[^0-9.]//g;
+($VERSION = '$Revision: 1.84 $ ') =~ s/[^0-9.]//g;
 
 
 my $reportfrom = 'jlsync report <root>';
@@ -197,7 +197,7 @@ foreach $client ( keys %cph )
             print "updated $client intersection is now " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
             foreach my $host ( keys %intersection )
             {
-                unless ( grep /^$host$/, @{ $hosts_with{$mask} } )
+                unless ( grep { /^$host$/ } @{ $hosts_with{$mask} } )
                 {
                     delete $intersection{$host};
                 }
@@ -551,6 +551,9 @@ sub rbuildstagepath
     return @excludepatterns;
 }
 
+#
+#
+#
 sub filtercontrolfiles
 {
     my @newlist        = @{ $_[0] };
@@ -559,7 +562,7 @@ sub filtercontrolfiles
 
     if ( defined($basenamefilter) )
     {
-        @newlist = grep /^$basenamefilter/, @newlist;
+        @newlist = grep {/^$basenamefilter/} @newlist;
     }
 
     # @newlist = sort @newlist;
@@ -578,7 +581,7 @@ sub filtercontrolfiles
 
     foreach $mask ( reverse @masks )
     {
-        my @alist = grep /\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$/, @newlist;
+        my @alist = grep {/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$/} @newlist;
         my $a;
         foreach $a (@alist)
         {
@@ -587,12 +590,12 @@ sub filtercontrolfiles
             # TODO : add symlink add/print case below
             print GREEN . "add:$srchref->{$a}->{srcpath}" . ( $srchref->{$a}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
             ( my $basename = $a ) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$//;
-            @newlist = grep !/^\Q$basename\E$/, @newlist;
-            @newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
+            @newlist = grep { !/^\Q$basename\E$/ } @newlist;
+            @newlist = grep { !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/ } @newlist;
             push( @newlist, $a );
         }
 
-        my @dlist = grep /\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$/, @newlist;
+        my @dlist = grep { /\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$/ } @newlist;
         my $d;
         foreach $d (@dlist)
         {
@@ -601,18 +604,18 @@ sub filtercontrolfiles
             # bug on this next line. we want to test file type (is it a directory?) of control file target, not control file itself.
             print RED . "del:$srchref->{$d}->{srcpath}" . ( $srchref->{$d}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
             ( my $basename = $d ) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$//;
-            @newlist = grep !/^\Q$basename\E$/, @newlist;
-            @newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/, @newlist;
+            @newlist = grep { !/^\Q$basename\E$/ } @newlist;
+            @newlist = grep { !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/ } @newlist;
         }
 
-        my @elist = grep /\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$/, @newlist;
+        my @elist = grep {/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$/ } @newlist;
         my $e;
         foreach $e (@elist)
         {
             print "e~ is $e\n" if $verbose;
             ( my $basename = $e ) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$//;
-            @newlist = grep !/^\Q$basename\E$/, @newlist;
-            @newlist = grep !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/, @newlist;
+            @newlist = grep { !/^\Q$basename\E$/ } @newlist;
+            @newlist = grep { !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/ } @newlist;
 
             #my $targetdir = join ("/" ,  (map  { $_ =~ s/\.\w[\w\-,]*\.a~$/$1/ ; $_ }   split("/",$dir) )  );
             ##my $targetdir = $dir;
@@ -633,7 +636,7 @@ sub filtercontrolfiles
             my @file_masks = split( ",", $1 );
             foreach my $fm (@file_masks)
             {
-                if ( grep /^$fm$/, @masks )
+                if ( grep { /^$fm$/ } @masks )
                 {
                     push( @newnewlist, $file );
                     last;
@@ -786,7 +789,7 @@ sub get
     }
     else
     {
-        if ( !grep( /^\Q$cgetmask\E$/, @{ $masks_of{$client} } ) )
+        if ( !grep { /^\Q$cgetmask\E$/ } @{ $masks_of{$client} }  )
         {
             print BOLD . BLACK . ON_YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
         }
