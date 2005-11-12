@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.82 2005/11/08 19:13:55 plastic Exp $
+# $Id: jlsync,v 1.83 2005/11/12 20:43:27 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -66,7 +66,7 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 *dir  = *File::Find::dir;
 
 my $VERSION;
-($VERSION = '$Revision: 1.82 $ ') =~ s/[^0-9.]//g;
+($VERSION = '$Revision: 1.83 $ ') =~ s/[^0-9.]//g;
 
 
 my $reportfrom = 'jlsync report <root>';
@@ -562,7 +562,8 @@ sub filtercontrolfiles
         @newlist = grep /^$basenamefilter/, @newlist;
     }
 
-    @newlist = sort @newlist;
+    # @newlist = sort @newlist;
+
     my @excludepatterns;
 
     if ($verbose)
@@ -650,7 +651,7 @@ sub filtercontrolfiles
         }
     }
 
-    @newlist = sort @newnewlist;
+    # @newlist = sort @newnewlist;
     print "newlist is now " . ( join ",", @newlist ) . "\n" if $verbose;
     return ( \@newlist, \@excludepatterns );
 }
@@ -1060,25 +1061,30 @@ sub nospin
 =head1 NAME
 
 jlsync - rsync wrapper to deploy files from a central repository to
-client hosts
+         client hosts and for ongoing configuration management.
 
 =head1 SYNOPSIS
 
     jlsync [--real] [--nocolor] [--verbose] clienthostname:/path/to/pushout 
-                [clienthostname2:/another/path2/pushout]
+            [clienthostname2:/another/path2/pushout]...
 
     jlsync --get [--real] [--mask=template_name] clienthostname:/path/to/pullin
+            [clienthostname2:/another/path2/pullin]...
 
     jlsync --report [--email=address] clienthostname:/path/to/check 
-                [clienthostname2:/another/path2/check]
+            [clienthostname2:/another/path2/check]...
 
 =head1 DESCRIPTION
 
 jlsync is a rsync wrapper that allows files and directories to be
-syncronised from a central repository to many client hosts. Files can
-be grouped into file templates that individual client hosts can
-"subscribe" to.  Deploy works well with ssh key authentication to avoid
-rsync over ssh being prompted for remote client root passwords.
+syncronised from a central repository to many client hosts. jlsync can
+be used for initial installation and also for ongoing configuration
+managment. Files can be grouped into file templates that individual
+client hosts can "subscribe" to. jlsync works well with ssh key
+authentication to avoid rsync over ssh being prompted for remote client
+root passwords.
+
+
 
 =head1 OPTIONS
 
