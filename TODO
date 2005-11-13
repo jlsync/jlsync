@@ -1,20 +1,39 @@
 
-- jlsync with custom masks on the command line.
+# jlsync TODO list
+#
+# $Revision: 1.10 $
 
-- clean up exclude file list mananagement code
+Clean up --get code. 
+* --get needs to recognise pre-existing /.mask.a~/ directories mid-path
+  in the repository.
+* make --get more interactive about repository placement with no --mask
+  command line given.
+* add colorised-diff option to user interaction
 
-- --report option with bb/hobbit functionality?
-- --version command line option.
+Logging
+* create a journal of all jlsync invocations and/or client changes so
+  that changes can be tracked
+* maybe add end-user subscription trigger so that admininistrators are
+  notified when changes are made to clients.
+* create journal/cache of filesystem changes using rsync --backup-dir .
+  clientside or serverside? Maybe add roll-back support to jlsync?
+
+Reporting
+* add option to filter out rsync --itemise directory datestamps ".d..t.... "
+* add report option with bb/hobbit functionality?
+
+Deploy
+- add friendly/colorized remote diff/cmp
+- add pager(less/more) support
+
+Repository
 - pre and post exec command control files?
-- log files?
-- friendly remote diff/cmp ?
-- pager
-- use File::Same
-- use more rsync options. --update ?  --backup ?
+- add dynamic subsition (hostname, ipaddress, mask specific) control file type
+- allow for relative paths on jlsync command line when working in the
+  repository/jlsync shell?
 
+- wrap rsync exec in a single function to capture output and check
+  return codes.
 
-- wrap rsync exec in a single function to capture output and check return codes.
-
-- all relative paths on commands when working in the repository.
 
 
