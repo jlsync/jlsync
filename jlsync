@@ -10,14 +10,14 @@
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 2
 # as published by the Free Software Foundation.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.88 2005/11/13 14:12:49 plastic Exp $
+# $Id: jlsync,v 1.89 2005/11/13 22:42:23 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -66,8 +66,7 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 *dir  = *File::Find::dir;
 
 my $VERSION;
-($VERSION = '$Revision: 1.88 $ ') =~ s/[^0-9.]//g;
-
+( $VERSION = '$Revision: 1.89 $ ' ) =~ s/[^0-9.]//g;
 
 my $reportfrom = 'jlsync report <root>';
 
@@ -106,7 +105,7 @@ GetOptions( "real"             => \$real,       # --real
             "nocolor|nocolour" => \$nocolor,    # --nocolor
             "mask=s"           => \$getmask,    # --mask=MASKNAME
             "silent"           => \$silent,     # --silent available on commandline for testing
-          ) || &usage;
+          ) || usage();
 
 if ($version)
 {
@@ -114,11 +113,11 @@ if ($version)
     exit 0;
 }
 
-&usage unless ( defined $ARGV[0] );
+usage() unless ( defined $ARGV[0] );
 
 foreach my $arg (@ARGV)
 {
-    &usage unless ( $arg =~ m|\w[\w\-]*:/| );
+    usage() unless ( $arg =~ m|\w[\w\-]*:/| );
 }
 
 if (    ( $real && $report )
@@ -126,7 +125,7 @@ if (    ( $real && $report )
      || ( $real && $email )
      || ( $get  && $email ) )
 {
-    &usage;
+    usage();
 }
 
 $silent = 1 if $report;
@@ -151,11 +150,11 @@ my %masks_of;
 my %hosts_with;
 
 open( CONFIG, $config ) || die "can not open $config";
-while (my $config_line = <CONFIG>)
+while ( my $config_line = <CONFIG> )
 {
     next if $config_line =~ /^#/;
     $config_line =~ s/\s+$//;
-    my @tmasks    = split(/\s+/,$config_line);
+    my @tmasks = split( /\s+/, $config_line );
     my $this_host = $tmasks[-1];    # host is last mask on line
     if ( $tmasks[0] eq 'DEFAULT' )
     {
@@ -197,7 +196,7 @@ foreach $client ( keys %cph )
             print "updated $client intersection is now " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
             foreach my $host ( keys %intersection )
             {
-                unless ( grep { /^$host$/ } @{ $hosts_with{$mask} } )
+                unless ( grep {/^$host$/} @{ $hosts_with{$mask} } )
                 {
                     delete $intersection{$host};
                 }
@@ -242,13 +241,13 @@ foreach $client ( keys %cph )
 }
 
 print "reading source repository image in... " unless $silent;
-my %srch = &srcdir($src);
+my %srch = srcdir($src);
 nospin()        unless $silent;
 print "done.\n" unless $silent;
 
 foreach $client ( keys %cph )
 {
-    &buildstageclient($client);
+    buildstageclient($client);
 }
 
 foreach $client ( keys %cph )
@@ -278,11 +277,11 @@ foreach $client ( keys %cph )
 
         if ($get)
         {
-            &get( $client, $path );
+            get( $client, $path );
         }
         else
         {
-            &deploy( $client, $path );
+            deploy( $client, $path );
         }
 
         if ( defined($excludepatternfile) )
@@ -362,7 +361,7 @@ sub srcdir
     while ( defined( $nextfile = readdir(DIR) ) )
     {
         next if $nextfile =~ /^\.\.?$/;
-        $dirh{$nextfile} = { &srcfile( $dir . "/" . $nextfile ) };
+        $dirh{$nextfile} = { srcfile( $dir . "/" . $nextfile ) };
     }
     close(DIR);
     spin() unless $silent;
@@ -386,7 +385,7 @@ sub srcfile
     {
         print "$filename is a dir\n" if $verbose;
         $fileh{type} = 'd';
-        $fileh{dir}  = { &srcdir($filename) };
+        $fileh{dir}  = { srcdir($filename) };
     }
     elsif ( -l _ )
     {
@@ -428,11 +427,11 @@ sub buildstageclient
 
     foreach my $path ( keys %{ $cph{$client} } )
     {
-        @{ $cph{$client}{$path} } = &buildstagepath( $client, $path );
+        @{ $cph{$client}{$path} } = buildstagepath( $client, $path );
     }
     utime( time, ( stat($src) )[9], $stgclient );
 
-    nospin() unless $silent;
+    nospin()                                                    unless $silent;
     print "done building new image for $client in $stgclient\n" unless $silent;
 }
 
@@ -443,7 +442,7 @@ sub buildstagepath
 
     $path =~ s|^/||;
 
-    my @excludepatterns = &rbuildstagepath( $masks_of{$client}, \%srch, $path, "$stg/$client" );
+    my @excludepatterns = rbuildstagepath( $masks_of{$client}, \%srch, $path, "$stg/$client" );
     my $stgclient = "$stg/$client";
     @excludepatterns = map { $_ =~ s|^\Q$stgclient||; $_ } @excludepatterns;
     return @excludepatterns;
@@ -469,13 +468,13 @@ sub rbuildstagepath
         my $nextpc = shift @pcs;
 
         # selectively filter controlfiles....
-        ( $filesaref, $excludearef ) = &filtercontrolfiles( [ keys %{$srch} ], $nextpc, $srch );
+        ( $filesaref, $excludearef ) = filtercontrolfiles( [ keys %{$srch} ], $nextpc, $srch );
 
         $path = join "/", @pcs;    # remaining path.
     }
     else
     {
-        ( $filesaref, $excludearef ) = &filtercontrolfiles( [ keys %{$srch} ], undef, $srch );
+        ( $filesaref, $excludearef ) = filtercontrolfiles( [ keys %{$srch} ], undef, $srch );
     }
 
     @excludepatterns = map { $dest . "/" . $_ } @{$excludearef};
@@ -512,7 +511,7 @@ sub rbuildstagepath
                 mkdir $destname, $mode || die "unable to mkdir $destname";
                 chown $uid, $gid, $destname;
             }
-            push( @excludepatterns, &rbuildstagepath( $masksref, $srch->{$srcname}{dir}, $path, $destname ) );
+            push( @excludepatterns, rbuildstagepath( $masksref, $srch->{$srcname}{dir}, $path, $destname ) );
             utime( time, $mtime, $destname );
 
         }
@@ -595,7 +594,7 @@ sub filtercontrolfiles
             push( @newlist, $a );
         }
 
-        my @dlist = grep { /\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$/ } @newlist;
+        my @dlist = grep {/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$/} @newlist;
         my $d;
         foreach $d (@dlist)
         {
@@ -608,7 +607,7 @@ sub filtercontrolfiles
             @newlist = grep { !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/ } @newlist;
         }
 
-        my @elist = grep {/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$/ } @newlist;
+        my @elist = grep {/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$/} @newlist;
         my $e;
         foreach $e (@elist)
         {
@@ -631,12 +630,12 @@ sub filtercontrolfiles
     my @newnewlist = ();
     foreach my $file (@newlist)
     {
-        if ( $file =~ /\.(\w[\w\-\,]*)\.a\~$/ )   
+        if ( $file =~ /\.(\w[\w\-\,]*)\.a\~$/ )
         {
             my @file_masks = split( ",", $1 );
             foreach my $fm (@file_masks)
             {
-                if ( grep { /^$fm$/ } @masks )
+                if ( grep {/^$fm$/} @masks )
                 {
                     push( @newnewlist, $file );
                     last;
@@ -645,6 +644,7 @@ sub filtercontrolfiles
         }
         elsif ( $file =~ /\.[ed]\~$/ )
         {
+
             # must be other masks.
             next;
         }
@@ -672,13 +672,13 @@ sub deploy
     print "pwd is now $stg/$client (staging area root)\n" if $verbose;
     if ($report)
     {
-        &deploy_rsync( "--dry-run", $client, $path );
+        deploy_rsync( "--dry-run", $client, $path );
     }
     else
     {
         unless ($real)
         {
-            &deploy_rsync( "--dry-run", $client, $path );
+            deploy_rsync( "--dry-run", $client, $path );
 
             # ask question.
             print "would your like run rsync now for real? [yes/No] ";
@@ -690,7 +690,7 @@ sub deploy
         }
         if ( $real || $yes )
         {
-            &deploy_rsync( "", $client, $path );
+            deploy_rsync( "", $client, $path );
         }
     }
 }
@@ -760,7 +760,7 @@ sub deploy_rsync
 }
 
 #
-# &get( $client, $path)
+# get( $client, $path)
 sub get
 {
     my $client = $_[0];
@@ -789,7 +789,7 @@ sub get
     }
     else
     {
-        if ( !grep { /^\Q$cgetmask\E$/ } @{ $masks_of{$client} }  )
+        if ( !grep {/^\Q$cgetmask\E$/} @{ $masks_of{$client} } )
         {
             print BOLD . BLACK . ON_YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
         }
@@ -834,7 +834,7 @@ PATHLOOP: foreach $pc (@pcs)
         my $nextfile;
         while ( defined( $nextfile = readdir(AP) ) )
         {
-            next if $nextfile !~ /^$pc/;
+            next                              if $nextfile !~ /^$pc/;
             print "\nnextfile is $nextfile\n" if $verbose;
             if ( $nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/ )
             {
@@ -903,6 +903,7 @@ PATHLOOP: foreach $pc (@pcs)
         }
         else
         {
+
             # path not found in repository.
             $found = 'no';
             last PATHLOOP;
@@ -1079,7 +1080,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.88 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.89 $)
 
 =head1 DESCRIPTION
 
