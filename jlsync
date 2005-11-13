@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.87 2005/11/13 13:22:39 plastic Exp $
+# $Id: jlsync,v 1.88 2005/11/13 14:12:49 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -66,7 +66,7 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 *dir  = *File::Find::dir;
 
 my $VERSION;
-($VERSION = '$Revision: 1.87 $ ') =~ s/[^0-9.]//g;
+($VERSION = '$Revision: 1.88 $ ') =~ s/[^0-9.]//g;
 
 
 my $reportfrom = 'jlsync report <root>';
@@ -1079,7 +1079,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.87 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.88 $)
 
 =head1 DESCRIPTION
 
@@ -1093,25 +1093,25 @@ root passwords.
 
 =head1 OPTIONS
 
-I<--nocolor> turns of color text highlighting. By default rsync commands
+C<--nocolor> turns of color text highlighting. By default rsync commands
 and other actions are highlighted in different colors.
 
-I<--verbose> turn on more debug output.
+C<--verbose> turn on more debug output.
 
-I<--get> pull files from the remote client into the repository (instead
+C<--get> pull files from the remote client into the repository (instead
 of the default behaviour which is to push out files form the
 repository).
 
-I<--real> do not prompt for confirmation of actions. Use this option
+C<--real> do not prompt for confirmation of actions. Use this option
 with caution!
 
-I<--mask=template_name> when pulling files from a remote client put them
+C<--mask=template_name> when pulling files from a remote client put them
 into the repostitory with and add mask of template_name.
 
-I<--report> print out a report of differences between client pathnames
+C<--report> print out a report of differences between client pathnames
 and staging image taken using the rsync --dry-run output.
 
-I<--email=address> Report is emailed to the email address "address"
+C<--email=address> Report is emailed to the email address "address"
 instead of being printed out.
 
 
@@ -1132,11 +1132,11 @@ Answer yes to run rsync again without the --dry-run rysnc option (ie. go
 ahead and make changes to client for "real").
 
 Only if you're 100% sure that jlsync is going add and delete
-the correct files you can run with the I<--real> option
+the correct files you can run with the C<--real> option
 
  jlsync --real jav04:/usr/java
 
-when the I<--real> option you are not prompted and rsync to the client
+when the C<--real> option you are not prompted and rsync to the client
 does not use the rsync --dry-run option. BE CAREFUL, incorrect usage or
 incorrect configuration in the repository could easily result in the
 permanent deletion of important files on the client.
@@ -1144,9 +1144,9 @@ permanent deletion of important files on the client.
 =head2 Getting remote files into the repository
 
 To quickly gather files and/or directories from a remote host back 
-into the repostory the I<--get> option can be used. 
+into the repostory the C<--get> option can be used. 
 A specific template for the gathered files can be named with the
-I<--mask> option.  For example to get a freshly installed httpd binary
+C<--mask> option.  For example to get a freshly installed httpd binary
 back from client host web01 into the repostory for the file template
 "WEBSERVERS" run
 
@@ -1162,7 +1162,7 @@ Files can be gathered into the special DEFAULT file template
 
 will result in C<usr/local/bin/rsync> being added to the repostitory.
 
-When a I<--mask> option is not given gathered files will be added to the
+When a C<--mask> option is not given gathered files will be added to the
 clients own host template. e.g.
 
  jlsync --get goanna:/etc/hosts
@@ -1307,7 +1307,7 @@ can given as a single comma separated list prior to the path. e.g.
 
 =head2 Advanced command line with matching template/mask names
 
-The I<=templatename:/path> command line notation can be used to match
+The C<=templatename:/path> command line notation can be used to match
 all hosts that "subscribe" to that templatename in the jlsync.config
 file. For example to select all hosts that have the SOLARIS template
 listed in as part configuration in jlsync.config the following could be
@@ -1335,21 +1335,21 @@ commas.  e.g. All hosts in London and Melbourne
 
 Ad-hoc filesystem changes made on a client can cause it's configuration
 to "drift" away from it's jlsync repository configuration. The
-I<--report> option can help maintain discipline over client and jlsync
+C<--report> option can help maintain discipline over client and jlsync
 repository changes by reporting any differences found. e.g.
 
  jlsync --report bill:/usr/local ben:/usr/local
 
 will generate an onscreen report of changes between the C</usr/local>
 directors on clients bill and ben and the repository. Using the
-I<--email> option will cause the report to be sent via email e.g.
+C<--email> option will cause the report to be sent via email e.g.
 
  jlsync --report --email=admin@company.com mailhub:/etc/mail
 
 Scheduling jlsync reports in cron can be a useful way to keep an eye on
 client/repository drift.
 
-= ABSOLUTELY NO WARRANTY
+=head1 ABSOLUTELY NO WARRANTY
 
 Because the program is licensed free of charge, there is no warranty
 for the program, to the extent permitted by applicable law. Except when
