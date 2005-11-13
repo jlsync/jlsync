@@ -1,3 +1,12 @@
 #!/bin/sh
 
-tar -cvf $1.tar $1/CHANGES     $1/jlsync.config  $1/INSTALL  $1/COPYING         $/jlsync    $1/TODO $1/.vimrc $1/.perltidyrc
+tar -cvf $1.tar \
+    $1/CHANGES \
+    $1/jlsync.config \
+    $1/INSTALL \
+    $1/COPYING \
+    $1/jlsync \
+    $1/TODO \
+    $1/.vimrc \
+    $1/.perltidyrc \
+

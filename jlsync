@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.89 2005/11/13 22:42:23 plastic Exp $
+# $Id: jlsync,v 1.90 2005/11/13 22:50:00 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -66,7 +66,7 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 *dir  = *File::Find::dir;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.89 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.90 $ ' ) =~ s/[^0-9.]//g;
 
 my $reportfrom = 'jlsync report <root>';
 
@@ -335,7 +335,7 @@ exit 0;
 
 ######################################################
 
-# datastructure
+# data structure
 # directory hash { fileone => filehash,  filetwo => filehash }
 # filehash { lstat => (normal lstat array),
 #	     type => "f" or "d" or "l",
@@ -351,7 +351,7 @@ exit 0;
 
 sub srcdir
 {
-    my $dir = $_[0];
+    my ($dir) = @_;
     my %dirh;
     local *DIR;
 
@@ -370,7 +370,7 @@ sub srcdir
 
 sub srcfile
 {
-    my $filename = $_[0];
+    my ($filename) = @_;
     my %fileh;
 
     $fileh{srcpath} = $filename;
@@ -410,7 +410,8 @@ sub usage
 
 sub buildstageclient
 {
-    my $client = $_[0];
+    my ($client) = @_;
+
     @masks = @{ $masks_of{$client} };    # @masks is a global var
 
     print "masks are " . BLUE . BOLD . join( " ", @masks ) . RESET . ".\n"
@@ -435,10 +436,11 @@ sub buildstageclient
     print "done building new image for $client in $stgclient\n" unless $silent;
 }
 
+#
+#
 sub buildstagepath
 {
-    my $client = $_[0];
-    my $path   = $_[1];
+    my ($client, $path) = @_;
 
     $path =~ s|^/||;
 
@@ -663,8 +665,7 @@ sub filtercontrolfiles
 #
 sub deploy
 {
-    my $client = $_[0];
-    my $path   = $_[1];
+    my ($client, $path) = @_;
 
     my $yes = 0;
     print "deploy: client: $client  path: $path\n" if $verbose;
@@ -699,9 +700,8 @@ sub deploy
 #
 sub deploy_rsync
 {
-    my $dryrun = $_[0];
-    my $client = $_[1];
-    my $path   = $_[2];
+    my ($dryrun, $client, $path) = @_;
+
     my $output;
     my $verbose = "";
 
@@ -763,8 +763,7 @@ sub deploy_rsync
 # get( $client, $path)
 sub get
 {
-    my $client = $_[0];
-    my $path   = $_[1];
+    my ($client, $path) = @_;
 
     my $target;
     my $cgetmask;    # client get mask
@@ -1055,7 +1054,7 @@ sub spin
 sub nospin
 {
     return     if $silent;
-    print "\b" if $spinning;                     # backspace over the last character
+    print "\b" if $spinning;   # backspace over the last character
     undef $spinning;
     $spinpos = 0;
 }
@@ -1080,7 +1079,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.89 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.90 $)
 
 =head1 DESCRIPTION
 
