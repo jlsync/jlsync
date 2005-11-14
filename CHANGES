@@ -1,16 +1,8 @@
-
 #
-# $Id: CHANGES,v 1.4 2005/03/29 19:36:58 plastic Exp $
+# $Id: CHANGES,v 1.5 2005/11/14 22:35:40 plastic Exp $
 #
 
-version: 1.15 2004/10/10
-- now using super cool Term::ANSIColor
-- cleaner output, more garbage hidden behind --verbose
-- improved error checking for config file
-- improved colorization for --get file comparisions.
-- improved --get interactivity.
-- default mask for --get is now always client host mask
-
-version: 1.12 2004/06/22 17:02:43
+version: 2.0 2005/11/13
+- first public release
 
 

@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.91 2005/11/14 21:24:17 plastic Exp $
+# $Id: jlsync,v 1.92 2005/11/14 22:33:27 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -25,22 +25,22 @@
 my $rsync = "/usr/local/bin/rsync";
 
 # special command line options to always use with rsync
-my $rsync_opts = "--rsync-path=/usr/local/bin/rsync --rsh=/usr/local/bin/ssh";
+my $rsync_opts = "--rsync-path=/usr/local/bin/rsync";
 
 # directories variables are without trailing /
-# leave $jlsyncdir set to "/jlsync" for compatibility with furture upgrades
-my $jlsyncdir = "/jlsync";
+# leave $jlsync_prefix set to "/jlsync" for furture upgrade compatibility
+my $jlsync_prefix = "/jlsync";
 
 # $src, $stg and $backup_dir must be on the same filesystem
-my $src        = $jlsyncdir . "/source";
-my $stg        = $jlsyncdir . "/stage";
-my $backup_dir = $jlsyncdir . "/backup";
+my $src        = $jlsync_prefix . "/source";
+my $stg        = $jlsync_prefix . "/stage";
+my $backup_dir = $jlsync_prefix . "/backup";
 
 # jlsync config file
-my $config = $jlsyncdir . "/etc/jlsync.config";
+my $config = $jlsync_prefix . "/etc/jlsync.config";
 
-# $smtpserver is used by Mail::Mailer to send --email reports through
-my $smtpserver = '127.0.0.1';
+# $smtp_server is used by Mail::Mailer to send --email reports through
+my $smtp_server = '127.0.0.1';
 
 # not all filesystems are created equal. leave this set to 0
 my $able_to_link_to_symlinks = 0;    # linux = 1 , solaris = 0 ;
@@ -52,6 +52,7 @@ use Cwd;
 use File::Find ();                   # recent version required.
 use File::Path;
 use IO::Prompt;
+
 # use File::stat;		# TODO: maybe use this later.
 use Term::ANSIColor qw(:constants);
 use File::Basename;
@@ -60,13 +61,14 @@ use Mail::Mailer;
 
 # for the convenience of &wanted calls, including -eval statements:
 #use vars qw/*name *dir  $mask @excludepatterns @masks/;
-use vars qw/*name *dir/;
+#use vars qw/*name *dir/;
 our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
-*name = *File::Find::name;
-*dir  = *File::Find::dir;
+
+#*name = *File::Find::name;
+#*dir  = *File::Find::dir;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.91 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.92 $ ' ) =~ s/[^0-9.]//g;
 
 my $reportfrom = 'jlsync report <root>';
 
@@ -130,7 +132,7 @@ if (    ( $real && $report )
 
 $silent = 1 if $report;
 
-while ( my $arg = shift @ARGV)
+while ( my $arg = shift @ARGV )
 {
     $arg =~ m|(.+):(.+)|;
     my $clientarg = $1;
@@ -316,7 +318,7 @@ END
             ? " - out of sync: " . $unjlsyncronized
             : " - fully jlsyncronized";
 
-        my $mailer = Mail::Mailer->new( 'smtp', Server => $smtpserver );
+        my $mailer = Mail::Mailer->new( 'smtp', Server => $smtp_server );
         $mailer->open( { From    => $reportfrom,
                          To      => $email,
                          Subject => 'jlsync report at ' . localtime(time) . $sinfo
@@ -440,7 +442,7 @@ sub buildstageclient
 #
 sub buildstagepath
 {
-    my ($client, $path) = @_;
+    my ( $client, $path ) = @_;
 
     $path =~ s|^/||;
 
@@ -665,7 +667,7 @@ sub filtercontrolfiles
 #
 sub deploy
 {
-    my ($client, $path) = @_;
+    my ( $client, $path ) = @_;
 
     my $yes = 0;
     print "deploy: client: $client  path: $path\n" if $verbose;
@@ -681,7 +683,7 @@ sub deploy
         {
             deploy_rsync( "--dry-run", $client, $path );
 
-            if ( prompt( -yes1, 'Would you like to run rysnc for real? ') )
+            if ( prompt( -yes1, 'Would you like to run rysnc for real? ' ) )
             {
                 $yes = 1;
             }
@@ -697,7 +699,7 @@ sub deploy
 #
 sub deploy_rsync
 {
-    my ($dryrun, $client, $path) = @_;
+    my ( $dryrun, $client, $path ) = @_;
 
     my $output;
     my $verbose = "";
@@ -760,7 +762,7 @@ sub deploy_rsync
 # get( $client, $path)
 sub get
 {
-    my ($client, $path) = @_;
+    my ( $client, $path ) = @_;
 
     my $target;
     my $cgetmask;    # client get mask
@@ -1004,7 +1006,7 @@ PATHLOOP: foreach $pc (@pcs)
     {
         print "this will be copied to...\n";
         print ON_WHITE . BLUE . $target . RESET . "\n";
-        if ( prompt(-yes1, 'would your like replace files for real? ') )
+        if ( prompt( -yes1, 'would your like replace files for real? ' ) )
         {
             $yes = 1;
         }
@@ -1049,7 +1051,7 @@ sub spin
 sub nospin
 {
     return     if $silent;
-    print "\b" if $spinning;   # backspace over the last character
+    print "\b" if $spinning;                     # backspace over the last character
     undef $spinning;
     $spinpos = 0;
 }
@@ -1074,7 +1076,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.91 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.92 $)
 
 =head1 DESCRIPTION
 
