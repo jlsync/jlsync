@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.92 2005/11/14 22:33:27 plastic Exp $
+# $Id: jlsync,v 1.93 2005/11/14 22:43:29 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -68,7 +68,7 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 #*dir  = *File::Find::dir;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.92 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.93 $ ' ) =~ s/[^0-9.]//g;
 
 my $reportfrom = 'jlsync report <root>';
 
@@ -574,7 +574,6 @@ sub filtercontrolfiles
 
     if ($verbose)
     {
-        print "predir is $dir\n";
         print "newlist is " . ( join ",", @newlist ) . "\n";
     }
     else
@@ -1076,7 +1075,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.92 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.93 $)
 
 =head1 DESCRIPTION
 
