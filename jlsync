@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.90 2005/11/13 22:50:00 plastic Exp $
+# $Id: jlsync,v 1.91 2005/11/14 21:24:17 plastic Exp $
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -51,7 +51,7 @@ use strict;
 use Cwd;
 use File::Find ();                   # recent version required.
 use File::Path;
-
+use IO::Prompt;
 # use File::stat;		# TODO: maybe use this later.
 use Term::ANSIColor qw(:constants);
 use File::Basename;
@@ -66,7 +66,7 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 *dir  = *File::Find::dir;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.90 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.91 $ ' ) =~ s/[^0-9.]//g;
 
 my $reportfrom = 'jlsync report <root>';
 
@@ -130,7 +130,7 @@ if (    ( $real && $report )
 
 $silent = 1 if $report;
 
-foreach my $arg (@ARGV)
+while ( my $arg = shift @ARGV)
 {
     $arg =~ m|(.+):(.+)|;
     my $clientarg = $1;
@@ -681,10 +681,7 @@ sub deploy
         {
             deploy_rsync( "--dry-run", $client, $path );
 
-            # ask question.
-            print "would your like run rsync now for real? [yes/No] ";
-            my $answer = <STDIN>;
-            if ( $answer =~ /^y/i )
+            if ( prompt( -yes1, 'Would you like to run rysnc for real? ') )
             {
                 $yes = 1;
             }
@@ -1007,9 +1004,7 @@ PATHLOOP: foreach $pc (@pcs)
     {
         print "this will be copied to...\n";
         print ON_WHITE . BLUE . $target . RESET . "\n";
-        print "would your like replace files for real? [yes/No] ";
-        my $answer = <STDIN>;
-        if ( $answer =~ /^y/i )
+        if ( prompt(-yes1, 'would your like replace files for real? ') )
         {
             $yes = 1;
         }
@@ -1079,7 +1074,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.90 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.91 $)
 
 =head1 DESCRIPTION
 
@@ -1127,7 +1122,7 @@ First run
 this will build a staging image for jav04 and then do a rsync --dry-run
 of C</usr/java> to jav04. Look closely at the output to verify the
 additions and deletions on the remote host are as expected. You will
-then be prompted with "would you like run rsync now for real? [yes/No]".
+then be prompted with "would you like to run rsync now for real? ".
 Answer yes to run rsync again without the --dry-run rysnc option (ie. go
 ahead and make changes to client for "real").
 

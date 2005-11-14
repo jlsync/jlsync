@@ -10,6 +10,7 @@ rsync version 2.6.4 or higher is required.
 perl version 5.8.0 or higher is required
 perl module Mail::Mailer is required
 perl module Term::ANSIcolor is required
+perl module IO::Prompt is required (which requires perl module Want)
 
 2. Create directories for jlsync repository and staging areas (they
 must be on the same filesystem). A dedicated filesystem mounted at
