@@ -17,39 +17,41 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.94 2005/11/15 10:37:06 plastic Exp $
+# $Id: jlsync,v 1.95 2005/11/20 23:50:56 plastic Exp $
+
+use Readonly;
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
 # path to rsync version 2.6.4 (or greater)
-my $rsync = "/usr/local/bin/rsync";
+Readonly my $rsync => "/usr/local/bin/rsync";
 
 # special command line options to always use with rsync
-my $rsync_opts = "--rsync-path=/usr/local/bin/rsync";
+Readonly my $rsync_opts => "--rsync-path=/usr/local/bin/rsync";
 
 # directories variables are without trailing /
 # leave $jlsync_prefix set to "/jlsync" for furture upgrade compatibility
-my $jlsync_prefix = "/jlsync";
+Readonly my $jlsync_prefix => "/jlsync";
 
 # $src, $stg and $backup_dir must be on the same filesystem
-my $src        = $jlsync_prefix . "/source";
-my $stg        = $jlsync_prefix . "/stage";
-my $backup_dir = $jlsync_prefix . "/backup";
+Readonly my $src        => $jlsync_prefix . "/source";
+Readonly my $stg        => $jlsync_prefix . "/stage";
+Readonly my $backup_dir => $jlsync_prefix . "/backup";
 
 # jlsync config file
-my $config = $jlsync_prefix . "/etc/jlsync.config";
+Readonly my $config => $jlsync_prefix . "/etc/jlsync.config";
 
 # $smtp_server is used by Mail::Mailer to send --email reports through
-my $smtp_server = '127.0.0.1';
+Readonly my $smtp_server => '127.0.0.1';
 
 # not all filesystems are created equal. leave this set to 0
-my $able_to_link_to_symlinks = 0;    # linux = 1 , solaris = 0 ;
+Readonly my $able_to_link_to_symlinks => 0;    # linux = 1 , solaris = 0 ;
 
 #################### END OF CONFIGURATION SECTION ###########################
 
 use strict;
 use Cwd;
-use File::Find ();                   # recent version required.
+#use File::Find ();                   # recent version required.
 use File::Path;
 use IO::Prompt;
 
@@ -67,10 +69,26 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 #*name = *File::Find::name;
 #*dir  = *File::Find::dir;
 
-my $VERSION;
-( $VERSION = '$Revision: 1.94 $ ' ) =~ s/[^0-9.]//g;
+Readonly my $MASK_RE => qr{ \w[\w-]* }xms;
+Readonly my $MASKS_RE =>  qr{ $MASK_RE (:? , $MASK_RE )* }xms;
+Readonly my $CONTROL_FILE_TYPE_RE => qr{ [ade] }xms; # a is Add , d is Delete, e is Exclude
+Readonly my $CONTROL_FILE_EXT_RE => qr{ 
+        $MASKS_RE               # maska,maskb
+        \.                      # . dot
+        $CONTROL_FILE_TYPE_RE   # 
+        \~                      # ~
+    }xms;
+Readonly my $CONTROL_FILE_RE => qr{ 
+        .*                      # basename
+        \.                      # . dot
+        $CONTROL_FILE_EXT_RE    # 
+        $                       # end of line
+    }xms;
 
-my $reportfrom = 'jlsync report <root>';
+my $VERSION;
+( $VERSION = '$Revision: 1.95 $ ' ) =~ s/[^0-9.]//g;
+
+Readonly my $reportfrom => 'jlsync report <root>';
 
 my @controlfiles = ();    # array of control file hashes.
 
@@ -559,22 +577,22 @@ sub rbuildstagepath
 #
 sub filtercontrolfiles
 {
-    my @newlist        = @{ $_[0] };
+    my @file_list        = @{ $_[0] };
     my $basenamefilter = $_[1];
     my $srchref        = $_[2];
 
+    my @filtered_list = @file_list;   
+
     if ( defined($basenamefilter) )
     {
-        @newlist = grep {/^$basenamefilter/} @newlist;
+        @filtered_list = grep {/^$basenamefilter/} @filtered_list;
     }
-
-    # @newlist = sort @newlist;
 
     my @excludepatterns;
 
     if ($verbose)
     {
-        print "newlist is " . ( join ",", @newlist ) . "\n";
+        print "filtered_list is " . ( join ",", @filtered_list ) . "\n";
     }
     else
     {
@@ -583,7 +601,7 @@ sub filtercontrolfiles
 
     foreach $mask ( reverse @masks )
     {
-        my @alist = grep {/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$/} @newlist;
+        my @alist = grep { m/\. ($MASK_RE,)* $mask (,$MASK_RE)* \.a~$ /xms } @filtered_list;
         my $a;
         foreach $a (@alist)
         {
@@ -591,13 +609,13 @@ sub filtercontrolfiles
 
             # TODO : add symlink add/print case below
             print GREEN . "add:$srchref->{$a}->{srcpath}" . ( $srchref->{$a}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
-            ( my $basename = $a ) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.a~$//;
-            @newlist = grep { !/^\Q$basename\E$/ } @newlist;
-            @newlist = grep { !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/ } @newlist;
-            push( @newlist, $a );
+            ( my $basename = $a ) =~ s{ \. ($MASK_RE,)* $mask (,$MASK_RE)* \.a~$ }{}xms;
+            @filtered_list = grep { !m/^\Q$basename\E$/ } @filtered_list;
+            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms  } @filtered_list;
+            push( @filtered_list, $a );
         }
 
-        my @dlist = grep {/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$/} @newlist;
+        my @dlist = grep {m/\. ($MASK_RE,)* $mask (,$MASK_RE)* \.d~$ /xms} @filtered_list;
         my $d;
         foreach $d (@dlist)
         {
@@ -605,61 +623,53 @@ sub filtercontrolfiles
 
             # bug on this next line. we want to test file type (is it a directory?) of control file target, not control file itself.
             print RED . "del:$srchref->{$d}->{srcpath}" . ( $srchref->{$d}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
-            ( my $basename = $d ) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.d~$//;
-            @newlist = grep { !/^\Q$basename\E$/ } @newlist;
-            @newlist = grep { !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\\-]*)*\.[ade]\~$/ } @newlist;
+            ( my $basename = $d ) =~ s/\.( $MASK_RE ,)* $mask (,$MASK_RE )* \.d~ $//xms;
+            @filtered_list = grep { !m/^\Q$basename\E$/ } @filtered_list;
+            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms  } @filtered_list;
         }
 
-        my @elist = grep {/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$/} @newlist;
+        my @elist = grep {m/\. ($MASK_RE,)* $mask (,$MASK_RE)* \.e~$ /xms} @filtered_list;
         my $e;
         foreach $e (@elist)
         {
             print "e~ is $e\n" if $verbose;
-            ( my $basename = $e ) =~ s/\.(\w[\w\-]*,)*$mask(,\w[\w\-]*)*\.e~$//;
-            @newlist = grep { !/^\Q$basename\E$/ } @newlist;
-            @newlist = grep { !/^\Q$basename\E\.\w[\w\-]*(,\w[\w\-]*)*\.[ade]\~$/ } @newlist;
-
-            #my $targetdir = join ("/" ,  (map  { $_ =~ s/\.\w[\w\-,]*\.a~$/$1/ ; $_ }   split("/",$dir) )  );
-            ##my $targetdir = $dir;
-            ##$targetdir =~ s|\.\w[\w\-,]*\.a~/|/|;
-            ##$targetdir =~ s|\.\w[\w\-,]*\.a~$||;
-            ##push(@excludepatterns, $targetdir . "/" . $basename);
+            ( my $basename = $e ) =~ s/\.( $MASK_RE ,)* $mask (,$MASK_RE )* \.e~ $//xms;
+            @filtered_list = grep { !m/^\Q$basename\E$/ } @filtered_list;
+            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms  } @filtered_list;
 
             push( @excludepatterns, $basename );
         }
     }
 
     # strip out any remaining control files for other non-matched masks while preserving .a~ files.
-    my @newnewlist = ();
-    foreach my $file (@newlist)
+    my @final_list = ();
+    foreach my $file (@filtered_list)
     {
-        if ( $file =~ /\.(\w[\w\-\,]*)\.a\~$/ )
+        if ( $file =~ /\. ($MASKS_RE) \.a \~$/xms )
         {
             my @file_masks = split( ",", $1 );
             foreach my $fm (@file_masks)
             {
                 if ( grep {/^$fm$/} @masks )
                 {
-                    push( @newnewlist, $file );
+                    push( @final_list, $file );
                     last;
                 }
             }
         }
         elsif ( $file =~ /\.[ed]\~$/ )
         {
-
-            # must be other masks.
+            # must be non-matching masks.
             next;
         }
-        else
+        else # just a regular filename (i.e. not a control file)
         {
-            push( @newnewlist, $file );
+            push( @final_list, $file ); 
         }
     }
 
-    @newlist = sort @newnewlist;
-    print "newlist is now " . ( join ",", @newlist ) . "\n" if $verbose;
-    return ( \@newlist, \@excludepatterns );
+    print "final_list is now " . ( join ",", @final_list ) . "\n" if $verbose;
+    return ( \@final_list, \@excludepatterns );
 }
 
 #
@@ -833,10 +843,10 @@ PATHLOOP: foreach $pc (@pcs)
         {
             next                              if $nextfile !~ /^$pc/;
             print "\nnextfile is $nextfile\n" if $verbose;
-            if ( $nextfile =~ /$pc\.(\w[\w\-]*(,\w[\w\-]*)?)\.([ade])\~/ )
+            if ( $nextfile =~ /$pc\.($MASKS_RE)\.($CONTROL_FILE_TYPE_RE)\~$/xms )
             {
                 my @masks = split( ",", $1 );
-                my $type  = $3;
+                my $type  = $2;
 
                 foreach my $mask (@masks)
                 {
@@ -1075,7 +1085,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.94 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.95 $)
 
 =head1 DESCRIPTION
 
