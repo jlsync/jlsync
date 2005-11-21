@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.96 2005/11/21 20:19:49 plastic Exp $
+# $Id: jlsync,v 1.97 2005/11/21 23:33:06 plastic Exp $
 
 use Readonly;
 
@@ -72,7 +72,7 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 
 Readonly my $MASK_RE              => qr{ \w[\w-]* }xms;
 Readonly my $MASKS_RE             => qr{ $MASK_RE (:? , $MASK_RE )* }xms;
-Readonly my $CONTROL_FILE_TYPE_RE => qr{ [ade] }xms;                        # a is Add , d is Delete, e is Exclude
+Readonly my $CONTROL_FILE_TYPE_RE => qr{ [ade] }xms;                        # Add Delete Exclude
 Readonly my $CONTROL_FILE_EXT_RE  => qr{ 
         $MASKS_RE               # maska,maskb
         \.                      # . dot
@@ -87,21 +87,19 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.96 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.97 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
-my @controlfiles = ();    # array of control file hashes.
-
-$| = 1;                   # turn on autoflush
+$| = 1;    # turn on autoflush
 
 my $spinpos;
 my $spinning;
 my $spinlen;
 
-umask 0;                  # needed by subsequent mkdirs
+umask 0;    # needed by subsequent mkdirs
 
-my %cph;                  # Client Path Hash
+my %paths_for;    # list of Paths for each Client
 
 my $client;
 my $path;
@@ -116,6 +114,9 @@ my $get;
 my $getmask;
 my $nocolor;
 my $unjlsyncronized = 0;
+my %masks_of;
+my %hosts_with;
+my $excludepatternfile;
 
 GetOptions( "real"             => \$real,       # --real
             "get"              => \$get,        # --get
@@ -134,13 +135,7 @@ if ($version)
     exit 0;
 }
 
-usage() unless ( defined $ARGV[0] );
-
-foreach my $arg (@ARGV)
-{
-    usage() unless ( $arg =~ m|\w[\w\-]*:/| );
-}
-
+# check for incompatibile command line options.
 if (    ( $real && $report )
      || ( $get  && $report )
      || ( $real && $email )
@@ -151,97 +146,26 @@ if (    ( $real && $report )
 
 $silent = 1 if $report;
 
+# process remaining command line
+usage() unless ( defined $ARGV[0] );
+
+config_slurp();    # needed prior to further command line checks
+
 while ( my $arg = shift @ARGV )
 {
-    $arg =~ m|(.+):(.+)|;
-    my $clientarg = $1;
-    my $path      = $2;
-    my @clients   = split( ",", $1 );
-    foreach my $client (@clients)
+    usage() unless ( $arg =~ m{(.+):(/.*)}xms );
+    my $clients_part = $1;
+    my $path_part    = $2;
+    foreach my $client ( matching_clients($clients_part) )
     {
-        @{ $cph{$client}{$path} } = ();
+        @{ $paths_for{$client}{$path_part} } = ();
     }
 }
 
 my $dryrun = $real ? "" : "--dry-run";
 if ($nocolor) { $ENV{'ANSI_COLORS_DISABLED'} = 'nocolor'; }
 
-my $excludepatternfile;
-my %masks_of;
-my %hosts_with;
-
-open( CONFIG, $config ) || die "can not open $config";
-while ( my $config_line = <CONFIG> )
-{
-    next if $config_line =~ /^#/;
-    $config_line =~ s/\s+$//;
-    my @tmasks = split( /\s+/, $config_line );
-    my $this_host = $tmasks[-1];    # host is last mask on line
-    if ( $tmasks[0] eq 'DEFAULT' )
-    {
-        if ( defined $masks_of{$this_host} )
-        {
-            print BOLD . RED . "Error: duplicate entires for $this_host is file $config . exiting." . RESET . "\n";
-            exit 1;
-        }
-        else
-        {
-            $masks_of{$this_host} = \@tmasks;
-            foreach my $mask (@tmasks)
-            {
-                push @{ $hosts_with{$mask} }, $this_host;
-            }
-        }
-    }
-}
-close CONFIG;
-
-foreach $client ( keys %cph )
-{
-    if ( $client =~ /^=(.*)/ )    # leading = is stripped off here
-    {
-        my @intersect_masks = split /=/, $1;
-        foreach my $mask (@intersect_masks)
-        {
-            unless ( defined $hosts_with{$mask} )
-            {
-                print "$mask not found in file $config. exiting.\n";
-                exit 1;
-            }
-        }
-
-        my $firstmask = shift @intersect_masks;
-        my %intersection = map { ( $_, 1 ) } @{ $hosts_with{$firstmask} };
-        foreach $mask (@intersect_masks)
-        {
-            print "updated $client intersection is now " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
-            foreach my $host ( keys %intersection )
-            {
-                unless ( grep {/^$host$/} @{ $hosts_with{$mask} } )
-                {
-                    delete $intersection{$host};
-                }
-            }
-        }
-
-        print "for client $client intersection of matching hosts is " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
-
-        # now update %cph
-        my $path = $cph{$client};
-        delete $cph{$client};
-        foreach my $host ( keys %intersection )
-        {
-            $cph{$host} = $path;
-        }
-    }
-    elsif ( !defined $masks_of{$client} )
-    {
-        print "$client not found in file $config. exiting.\n";
-        exit 1;
-    }
-}
-
-foreach $client ( keys %cph )
+foreach $client ( keys %paths_for )
 {
     my $lockfile = "$stg/${client}-lock";
     if ( -f $lockfile )
@@ -253,7 +177,7 @@ foreach $client ( keys %cph )
     }
 }
 
-foreach $client ( keys %cph )
+foreach $client ( keys %paths_for )
 {
     my $lockfile = "$stg/${client}-lock";
     open( LOCK, ">$lockfile" ) || die "could not create lockfile: $lockfile";
@@ -266,19 +190,19 @@ my %srch = srcdir($src);
 nospin()        unless $silent;
 print "done.\n" unless $silent;
 
-foreach $client ( keys %cph )
+foreach $client ( keys %paths_for )
 {
     buildstageclient($client);
 }
 
-foreach $client ( keys %cph )
+foreach $client ( keys %paths_for )
 {
-    foreach $path ( keys %{ $cph{$client} } )
+    foreach $path ( keys %{ $paths_for{$client} } )
     {
 
-        if ( @{ $cph{$client}{$path} } )
+        if ( @{ $paths_for{$client}{$path} } )
         {
-            my @excludepatterns = @{ $cph{$client}{$path} };
+            my @excludepatterns = @{ $paths_for{$client}{$path} };
 
             print "exclude patterns for " . CYAN . BOLD . $client . ":" . $path . RESET . " are:\n" . ON_CYAN . "\n" . join( "\n", @excludepatterns ) . "\n" . RESET . "\n"
                 unless $silent;
@@ -312,7 +236,7 @@ foreach $client ( keys %cph )
     }
 }
 
-foreach $client ( keys %cph )
+foreach $client ( keys %paths_for )
 {
     my $lockfile = "$stg/${client}-lock";
     unlink $lockfile;
@@ -353,6 +277,100 @@ END
 }
 
 exit 0;
+
+# slurp in jlsync.config and populate %masks_of and %hosts_with
+sub config_slurp
+{
+    open( CONFIG, $config ) || die "can not open $config";
+    while ( my $config_line = <CONFIG> )
+    {
+        next if $config_line =~ /^#/;
+        $config_line =~ s/\s+$//;
+        my @tmasks = split( /\s+/, $config_line );
+        my $this_host = $tmasks[-1];    # host is last mask on line
+        if ( $tmasks[0] eq 'DEFAULT' )
+        {
+            if ( defined $masks_of{$this_host} )
+            {
+                print BOLD . RED . "Error: duplicate entires for $this_host is file $config . exiting." . RESET . "\n";
+                exit 1;
+            }
+            else
+            {
+                $masks_of{$this_host} = \@tmasks;
+                foreach my $mask (@tmasks)
+                {
+                    push @{ $hosts_with{$mask} }, $this_host;
+                }
+            }
+        }
+    }
+    close CONFIG;
+    return;
+}
+
+#  parse command line client part, eg. =MASKA=MASKB,hostc,=MASKD
+#  and return list of matching clients
+sub matching_clients
+{
+    my ($command_line_client_part) = @_;
+
+    my @parts = split( ',', $command_line_client_part );
+    my @clients;
+
+    foreach my $client_part (@parts)
+    {
+        if ( $client_part =~ /^=(.*)/ )    # leading = is stripped off here
+        {
+            my @intersect_masks = split /=/, $1;
+            foreach my $mask (@intersect_masks)
+            {
+                unless ( defined $hosts_with{$mask} )
+                {
+                    print "$mask not found in file $config. exiting.\n";
+                    exit 1;
+                }
+            }
+
+            my $firstmask = shift @intersect_masks;
+            my %intersection = map { ( $_, 1 ) } @{ $hosts_with{$firstmask} };
+            foreach $mask (@intersect_masks)
+            {
+                print "updated $client_part intersection is now " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
+                foreach my $host ( keys %intersection )
+                {
+                    unless ( grep {/^$host$/} @{ $hosts_with{$mask} } )
+                    {
+                        delete $intersection{$host};
+                    }
+                }
+            }
+
+            print "for client_part $client_part intersection of matching hosts is " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
+
+            if ( keys %intersection )
+            {
+                push @clients, ( keys %intersection );
+            }
+            else
+            {
+                print "no maching clients found for intersection of $client_part . exiting.\n";
+                exit 1;
+            }
+        }
+        elsif ( !defined $masks_of{$client_part} )
+        {
+            print "$client not found in file $config. exiting.\n";
+            exit 1;
+        }
+        else
+        {
+            push @clients, $client_part;    # a regular client
+        }
+    }
+
+    return @clients;
+}
 
 ######################################################
 
@@ -447,9 +465,9 @@ sub buildstageclient
 
     print "building new image for $client in $stgclient ...\n" unless $silent;
 
-    foreach my $path ( keys %{ $cph{$client} } )
+    foreach my $path ( keys %{ $paths_for{$client} } )
     {
-        @{ $cph{$client}{$path} } = buildstagepath( $client, $path );
+        @{ $paths_for{$client}{$path} } = buildstagepath( $client, $path );
     }
     utime( time, ( stat($src) )[9], $stgclient );
 
@@ -1087,7 +1105,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.96 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.97 $)
 
 =head1 DESCRIPTION
 
