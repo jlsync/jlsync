@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.95 2005/11/20 23:50:56 plastic Exp $
+# $Id: jlsync,v 1.96 2005/11/21 20:19:49 plastic Exp $
 
 use Readonly;
 
@@ -51,6 +51,7 @@ Readonly my $able_to_link_to_symlinks => 0;    # linux = 1 , solaris = 0 ;
 
 use strict;
 use Cwd;
+
 #use File::Find ();                   # recent version required.
 use File::Path;
 use IO::Prompt;
@@ -69,10 +70,10 @@ our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 #*name = *File::Find::name;
 #*dir  = *File::Find::dir;
 
-Readonly my $MASK_RE => qr{ \w[\w-]* }xms;
-Readonly my $MASKS_RE =>  qr{ $MASK_RE (:? , $MASK_RE )* }xms;
-Readonly my $CONTROL_FILE_TYPE_RE => qr{ [ade] }xms; # a is Add , d is Delete, e is Exclude
-Readonly my $CONTROL_FILE_EXT_RE => qr{ 
+Readonly my $MASK_RE              => qr{ \w[\w-]* }xms;
+Readonly my $MASKS_RE             => qr{ $MASK_RE (:? , $MASK_RE )* }xms;
+Readonly my $CONTROL_FILE_TYPE_RE => qr{ [ade] }xms;                        # a is Add , d is Delete, e is Exclude
+Readonly my $CONTROL_FILE_EXT_RE  => qr{ 
         $MASKS_RE               # maska,maskb
         \.                      # . dot
         $CONTROL_FILE_TYPE_RE   # 
@@ -86,7 +87,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.95 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.96 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -577,11 +578,11 @@ sub rbuildstagepath
 #
 sub filtercontrolfiles
 {
-    my @file_list        = @{ $_[0] };
+    my @file_list      = @{ $_[0] };
     my $basenamefilter = $_[1];
     my $srchref        = $_[2];
 
-    my @filtered_list = @file_list;   
+    my @filtered_list = @file_list;
 
     if ( defined($basenamefilter) )
     {
@@ -601,7 +602,7 @@ sub filtercontrolfiles
 
     foreach $mask ( reverse @masks )
     {
-        my @alist = grep { m/\. ($MASK_RE,)* $mask (,$MASK_RE)* \.a~$ /xms } @filtered_list;
+        my @alist = grep {m/\. ($MASK_RE,)* $mask (,$MASK_RE)* \.a~$ /xms} @filtered_list;
         my $a;
         foreach $a (@alist)
         {
@@ -611,7 +612,7 @@ sub filtercontrolfiles
             print GREEN . "add:$srchref->{$a}->{srcpath}" . ( $srchref->{$a}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
             ( my $basename = $a ) =~ s{ \. ($MASK_RE,)* $mask (,$MASK_RE)* \.a~$ }{}xms;
             @filtered_list = grep { !m/^\Q$basename\E$/ } @filtered_list;
-            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms  } @filtered_list;
+            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms } @filtered_list;
             push( @filtered_list, $a );
         }
 
@@ -625,7 +626,7 @@ sub filtercontrolfiles
             print RED . "del:$srchref->{$d}->{srcpath}" . ( $srchref->{$d}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
             ( my $basename = $d ) =~ s/\.( $MASK_RE ,)* $mask (,$MASK_RE )* \.d~ $//xms;
             @filtered_list = grep { !m/^\Q$basename\E$/ } @filtered_list;
-            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms  } @filtered_list;
+            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms } @filtered_list;
         }
 
         my @elist = grep {m/\. ($MASK_RE,)* $mask (,$MASK_RE)* \.e~$ /xms} @filtered_list;
@@ -635,7 +636,7 @@ sub filtercontrolfiles
             print "e~ is $e\n" if $verbose;
             ( my $basename = $e ) =~ s/\.( $MASK_RE ,)* $mask (,$MASK_RE )* \.e~ $//xms;
             @filtered_list = grep { !m/^\Q$basename\E$/ } @filtered_list;
-            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms  } @filtered_list;
+            @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms } @filtered_list;
 
             push( @excludepatterns, $basename );
         }
@@ -659,12 +660,13 @@ sub filtercontrolfiles
         }
         elsif ( $file =~ /\.[ed]\~$/ )
         {
+
             # must be non-matching masks.
             next;
         }
-        else # just a regular filename (i.e. not a control file)
+        else    # just a regular filename (i.e. not a control file)
         {
-            push( @final_list, $file ); 
+            push( @final_list, $file );
         }
     }
 
@@ -1085,7 +1087,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.95 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.96 $)
 
 =head1 DESCRIPTION
 
