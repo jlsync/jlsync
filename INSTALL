@@ -11,6 +11,7 @@ perl version 5.8.0 or higher is required
 perl module Mail::Mailer is required
 perl module Term::ANSIcolor is required
 perl module IO::Prompt is required (which requires perl module Want)
+perl module Readonly is required 
 
 2. Create directories for jlsync repository and staging areas (they
 must be on the same filesystem). A dedicated filesystem mounted at
