@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.98 2005/11/22 23:10:56 plastic Exp $
+# $Id: jlsync,v 1.99 2005/11/23 10:36:26 plastic Exp $
 
 use Readonly;
 
@@ -87,7 +87,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.98 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.99 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -359,7 +359,7 @@ sub matching_clients
         }
         elsif ( !defined $masks_of{$client_part} )
         {
-            print "$client not found in file $config. exiting.\n";
+            print "$client_part not found in file $config. exiting.\n";
             exit 1;
         }
         else
@@ -1104,7 +1104,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.98 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.99 $)
 
 =head1 DESCRIPTION
 
