@@ -17,9 +17,10 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.99 2005/11/23 10:36:26 plastic Exp $
+# $Id: jlsync,v 1.100 2005/11/25 21:37:39 plastic Exp $
 
 use Readonly;
+use strict;
 
 #################### BEGIN CONFIGURATION SECTION ###########################
 
@@ -49,26 +50,18 @@ Readonly my $able_to_link_to_symlinks => 0;    # linux = 1 , solaris = 0 ;
 
 #################### END OF CONFIGURATION SECTION ###########################
 
-use strict;
-use Cwd;
-
-#use File::Find ();                   # recent version required.
+# use File::stat;		# TODO: maybe use this later.
 use File::Path;
 use IO::Prompt;
-
-# use File::stat;		# TODO: maybe use this later.
 use Term::ANSIColor qw(:constants);
 use File::Basename;
 use Getopt::Long;
 use Mail::Mailer;
+use File::Pid;
 
-# for the convenience of &wanted calls, including -eval statements:
-#use vars qw/*name *dir  $mask @excludepatterns @masks/;
-#use vars qw/*name *dir/;
+#use vars qw/$mask @excludepatterns @masks/;
 our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
 
-#*name = *File::Find::name;
-#*dir  = *File::Find::dir;
 
 Readonly my $MASK_RE              => qr{ \w[\w-]* }xms;
 Readonly my $MASKS_RE             => qr{ $MASK_RE (:? , $MASK_RE )* }xms;
@@ -87,7 +80,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.99 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.100 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -117,6 +110,7 @@ my $unjlsyncronized = 0;
 my %masks_of;
 my %hosts_with;
 my $excludepatternfile;
+my @pidfiles = (); # list of File::Pid objects.
 
 GetOptions( "real"             => \$real,       # --real
             "get"              => \$get,        # --get
@@ -167,21 +161,17 @@ while ( my $arg = shift @ARGV )
 foreach $client ( keys %paths_for )
 {
     my $lockfile = "$stg/${client}-lock";
-    if ( -f $lockfile )
+    my $pidfile = File::Pid->new( { file => $lockfile } );
+    if ( ( -f $lockfile) && (my $another_pid = $pidfile->running) )
     {
-        print "jlsync currently locked ( $lockfile ) by process id ";
-        system "cat", $lockfile;
-        print "\n";
+        print "jlsync stage locked ( $lockfile ) by process id $another_pid\n";
         exit 1;
     }
-}
-
-foreach $client ( keys %paths_for )
-{
-    my $lockfile = "$stg/${client}-lock";
-    open( LOCK, ">$lockfile" ) || die "could not create lockfile: $lockfile";
-    print LOCK $$;
-    close LOCK;
+    else
+    {
+        $pidfile->write || die "could not create lockfile: $lockfile";
+        push @pidfiles, $pidfile;
+    }
 }
 
 print "reading source repository image in... " unless $silent;
@@ -235,10 +225,9 @@ foreach $client ( keys %paths_for )
     }
 }
 
-foreach $client ( keys %paths_for )
+foreach my $pidfile ( @pidfiles )
 {
-    my $lockfile = "$stg/${client}-lock";
-    unlink $lockfile;
+    $pidfile->remove or warn "could not unlike pid file\n";
 }
 
 if ($report)
@@ -1104,7 +1093,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.99 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.100 $)
 
 =head1 DESCRIPTION
 
