@@ -1,5 +1,5 @@
 
-# jlsync INSTALL instructions $Version$
+# jlsync INSTALL instructions $Revision: 1.6 $
 
 Before you use jlsync you should be familiar with rsync.  You should
 understand exactly how powerful and how dangerous rsync can be.
@@ -8,10 +8,13 @@ understand exactly how powerful and how dangerous rsync can be.
 
 rsync version 2.6.4 or higher is required.
 perl version 5.8.0 or higher is required
-perl module Mail::Mailer is required
-perl module Term::ANSIcolor is required
-perl module IO::Prompt is required (which requires perl module Want)
-perl module Readonly is required 
+The following perl modules are required:
+    Mail::Mailer 
+    Term::ANSIcolor 
+    IO::Prompt         
+    Want
+    Readonly
+    File::Pid
 
 2. Create directories for jlsync repository and staging areas (they
 must be on the same filesystem). A dedicated filesystem mounted at
