@@ -1,6 +1,11 @@
 #
-# $Id: CHANGES,v 1.5 2005/11/14 22:35:40 plastic Exp $
+# $Id: CHANGES,v 1.6 2005/11/27 19:49:02 plastic Exp $
 #
+
+version: 2.0 jlsync_version_1.102 2005/11/27
+- fixed command line bug where =MASK:/path could cause other paths to be
+  forgotton.
+- lots of Perl Best Practices fixes and rewrites.
 
 version: 2.0 2005/11/13
 - first public release
