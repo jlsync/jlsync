@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.100 2005/11/25 21:37:39 plastic Exp $
+# $Id: jlsync,v 1.101 2005/11/27 15:48:48 plastic Exp $
 
 use Readonly;
 use strict;
@@ -59,10 +59,6 @@ use Getopt::Long;
 use Mail::Mailer;
 use File::Pid;
 
-#use vars qw/$mask @excludepatterns @masks/;
-our ( $mask, @excludepatterns, @masks, $nsrc, $dest );
-
-
 Readonly my $MASK_RE              => qr{ \w[\w-]* }xms;
 Readonly my $MASKS_RE             => qr{ $MASK_RE (:? , $MASK_RE )* }xms;
 Readonly my $CONTROL_FILE_TYPE_RE => qr{ [ade] }xms;                        # Add Delete Exclude
@@ -80,7 +76,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.100 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.101 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -322,7 +318,7 @@ sub matching_clients
 
             my $firstmask = shift @intersect_masks;
             my %intersection = map { ( $_, 1 ) } @{ $hosts_with{$firstmask} };
-            foreach $mask (@intersect_masks)
+            foreach my $mask (@intersect_masks)
             {
                 print "updated $client_part intersection is now " . ( join " ", ( keys %intersection ) ) . "\n" if $verbose;
                 foreach my $host ( keys %intersection )
@@ -439,9 +435,7 @@ sub buildstageclient
 {
     my ($client) = @_;
 
-    @masks = @{ $masks_of{$client} };    # @masks is a global var
-
-    print "masks are " . BLUE . BOLD . join( " ", @masks ) . RESET . ".\n"
+    print "masks are " . BLUE . BOLD . join( " ", @{$masks_of{$client}} ) . RESET . ".\n"
         unless $silent;
 
     my $stgclient = "$stg/$client";
@@ -497,13 +491,13 @@ sub rbuildstagepath
         my $nextpc = shift @pcs;
 
         # selectively filter controlfiles....
-        ( $filesaref, $excludearef ) = filtercontrolfiles( [ keys %{$srch} ], $nextpc, $srch );
+        ( $filesaref, $excludearef ) = filtercontrolfiles( [ keys %{$srch} ], $nextpc, $srch , $masksref);
 
         $path = join "/", @pcs;    # remaining path.
     }
     else
     {
-        ( $filesaref, $excludearef ) = filtercontrolfiles( [ keys %{$srch} ], undef, $srch );
+        ( $filesaref, $excludearef ) = filtercontrolfiles( [ keys %{$srch} ], undef, $srch , $masksref);
     }
 
     @excludepatterns = map { $dest . "/" . $_ } @{$excludearef};
@@ -587,6 +581,7 @@ sub filtercontrolfiles
     my @file_list      = @{ $_[0] };
     my $basenamefilter = $_[1];
     my $srchref        = $_[2];
+    my @masks          = @{$_[3]};
 
     my @filtered_list = @file_list;
 
@@ -606,7 +601,7 @@ sub filtercontrolfiles
         spin();
     }
 
-    foreach $mask ( reverse @masks )
+    foreach my $mask ( reverse @masks )
     {
         my @alist = grep {m/\. ($MASK_RE,)* $mask (,$MASK_RE)* \.a~$ /xms} @filtered_list;
         my $a;
@@ -1093,7 +1088,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.100 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.101 $)
 
 =head1 DESCRIPTION
 
