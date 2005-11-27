@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.102 2005/11/27 17:29:16 plastic Exp $
+# $Id: jlsync,v 1.103 2005/11/27 20:38:46 plastic Exp $
 
 use Readonly;
 use strict;
@@ -76,7 +76,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.102 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.103 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -174,7 +174,7 @@ print "done.\n" unless $silent;
 
 foreach my $client ( keys %paths_for )
 {
-    buildstageclient($client);
+    build_image($client, "$stg/$client");
 }
 
 foreach my $client ( keys %paths_for )
@@ -429,49 +429,54 @@ sub usage
     exit 1;
 }
 
-sub buildstageclient
+# build_image($client,$image_dir)
+# build the jlsync image for $client in $image_dir
+#
+sub build_image
 {
-    my ($client) = @_;
+    my ($client, $image_dir) = @_;
 
     print "masks are " . BLUE . BOLD . join( " ", @{$masks_of{$client}} ) . RESET . ".\n"
         unless $silent;
 
     my $stgclient = "$stg/$client";
-    print "deleting old image for $client in $stgclient ... " unless $silent;
-    system "/bin/rm -rf $stgclient";
-    if ( $? != 0 ) { die "could not /bin/rm -rf $stgclient"; }
-    print "done.\n" unless $silent;
-    mkdir "$stgclient", 0755 or die "could not mkdir $stgclient";
+    if ( -e $image_dir )
+    {
+        print "deleting old image for $client in $image_dir ... " unless $silent;
+        system "/bin/rm -rf $image_dir";
+        if ( $? != 0 ) { die "could not /bin/rm -rf $image_dir"; }
+        print "done.\n" unless $silent;
+    }
+    mkdir $image_dir, 0755 or die "could not mkdir $image_dir";
 
-    print "building new image for $client in $stgclient ...\n" unless $silent;
+    print "building new image for $client in $image_dir ...\n" unless $silent;
 
     foreach my $path ( keys %{ $paths_for{$client} } )
     {
-        @{ $paths_for{$client}{$path} } = buildstagepath( $client, $path );
+        @{ $paths_for{$client}{$path} } = build_path( $client, $image_dir, $path );
     }
-    utime( time, ( stat($src) )[9], $stgclient );
+    utime( time, ( stat($src) )[9], $image_dir );
 
     nospin()                                                    unless $silent;
-    print "done building new image for $client in $stgclient\n" unless $silent;
+    print "done building new image for $client in $image_dir\n" unless $silent;
 }
 
 #
 #
-sub buildstagepath
+sub build_path
 {
-    my ( $client, $path ) = @_;
+    my ( $client, $image_dir, $path ) = @_;
 
     $path =~ s|^/||;
 
-    my @excludepatterns = rbuildstagepath( $masks_of{$client}, \%srch, $path, "$stg/$client" );
-    my $stgclient = "$stg/$client";
-    @excludepatterns = map { $_ =~ s|^\Q$stgclient||; $_ } @excludepatterns;
+    my @excludepatterns = rbuild_path( $masks_of{$client}, \%srch, $path, $image_dir );
+    @excludepatterns = map { $_ =~ s|^\Q$image_dir||; $_ } @excludepatterns;
     return @excludepatterns;
 }
 
-# rbuildstagepath - recursive build stage path
+# rbuild_path - recursive build path
 #
-sub rbuildstagepath
+sub rbuild_path
 {
     my $masksref = $_[0];    # reference to array of client masks as listed jlsync.config
     my $srch     = $_[1];    # reference to source hash rooted at current directory level
@@ -532,7 +537,7 @@ sub rbuildstagepath
                 mkdir $destname, $mode || die "unable to mkdir $destname";
                 chown $uid, $gid, $destname;
             }
-            push( @excludepatterns, rbuildstagepath( $masksref, $srch->{$srcname}{dir}, $path, $destname ) );
+            push( @excludepatterns, rbuild_path( $masksref, $srch->{$srcname}{dir}, $path, $destname ) );
             utime( time, $mtime, $destname );
 
         }
@@ -776,6 +781,7 @@ sub get
 
     my $target;
     my $cgetmask;    # client get mask
+    my $stggetroot    = $stg . "/" . $client ;
     my $stgget        = $stg . "/" . $client . $path;
     my $srcget        = $src . $path;
     my $stggettmp     = $stg . "/" . $client . "-get";
@@ -807,7 +813,10 @@ sub get
     # now copy files from destination back into staging
     # - no could overwrite contents of hard linked files?
 
-    my $command = "$rsync $rsync_opts --compress --itemize-changes --archive --delete --backup --backup-dir=$backup_dir --links --recursive --relative --verbose";
+    # TODO: what is the --backup stragegy here????
+    # TODO: considier --link-dest instead of --copy-dest?
+
+    my $command = "$rsync $rsync_opts --compress --itemize-changes --archive --delete --copy-dest=$stggetroot --backup --backup-dir=$backup_dir --links --recursive --relative --verbose";
     $command .= " --exclude-from=$excludepatternfile"
         if ( defined($excludepatternfile) );
     $command .= " $client:$path $stggettmp";
@@ -1086,7 +1095,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.102 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.103 $)
 
 =head1 DESCRIPTION
 

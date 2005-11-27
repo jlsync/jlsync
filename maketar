@@ -9,4 +9,6 @@ tar -cvf $1.tar \
     $1/TODO \
     $1/.vimrc \
     $1/.perltidyrc \
+    $1/README \
+
 
