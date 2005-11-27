@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.101 2005/11/27 15:48:48 plastic Exp $
+# $Id: jlsync,v 1.102 2005/11/27 17:29:16 plastic Exp $
 
 use Readonly;
 use strict;
@@ -76,7 +76,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.101 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.102 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -90,8 +90,6 @@ umask 0;    # needed by subsequent mkdirs
 
 my %paths_for;    # list of Paths for each Client
 
-my $client;
-my $path;
 my $verbose;
 my $version;
 my $report;
@@ -105,7 +103,6 @@ my $nocolor;
 my $unjlsyncronized = 0;
 my %masks_of;
 my %hosts_with;
-my $excludepatternfile;
 my @pidfiles = (); # list of File::Pid objects.
 
 GetOptions( "real"             => \$real,       # --real
@@ -154,7 +151,7 @@ while ( my $arg = shift @ARGV )
     }
 }
 
-foreach $client ( keys %paths_for )
+foreach my $client ( keys %paths_for )
 {
     my $lockfile = "$stg/${client}-lock";
     my $pidfile = File::Pid->new( { file => $lockfile } );
@@ -175,15 +172,16 @@ my %srch = srcdir($src);
 nospin()        unless $silent;
 print "done.\n" unless $silent;
 
-foreach $client ( keys %paths_for )
+foreach my $client ( keys %paths_for )
 {
     buildstageclient($client);
 }
 
-foreach $client ( keys %paths_for )
+foreach my $client ( keys %paths_for )
 {
-    foreach $path ( keys %{ $paths_for{$client} } )
+    foreach my $path ( keys %{ $paths_for{$client} } )
     {
+        my $excludepatternfile;
 
         if ( @{ $paths_for{$client}{$path} } )
         {
@@ -207,11 +205,11 @@ foreach $client ( keys %paths_for )
 
         if ($get)
         {
-            get( $client, $path );
+            get( $client, $path, $excludepatternfile );
         }
         else
         {
-            deploy( $client, $path );
+            deploy( $client, $path, $excludepatternfile );
         }
 
         if ( defined($excludepatternfile) )
@@ -679,7 +677,7 @@ sub filtercontrolfiles
 #
 sub deploy
 {
-    my ( $client, $path ) = @_;
+    my ( $client, $path, $excludepatternfile ) = @_;
 
     my $yes = 0;
     print "deploy: client: $client  path: $path\n" if $verbose;
@@ -687,13 +685,13 @@ sub deploy
     print "pwd is now $stg/$client (staging area root)\n" if $verbose;
     if ($report)
     {
-        deploy_rsync( "--dry-run", $client, $path );
+        deploy_rsync( "--dry-run", $client, $path, $excludepatternfile );
     }
     else
     {
         unless ($real)
         {
-            deploy_rsync( "--dry-run", $client, $path );
+            deploy_rsync( "--dry-run", $client, $path, $excludepatternfile );
 
             if ( prompt( -yes1, 'Would you like to run rysnc for real? ' ) )
             {
@@ -702,7 +700,7 @@ sub deploy
         }
         if ( $real || $yes )
         {
-            deploy_rsync( "", $client, $path );
+            deploy_rsync( "", $client, $path, $excludepatternfile );
         }
     }
 }
@@ -711,7 +709,7 @@ sub deploy
 #
 sub deploy_rsync
 {
-    my ( $dryrun, $client, $path ) = @_;
+    my ( $dryrun, $client, $path, $excludepatternfile ) = @_;
 
     my $output;
     my $verbose = "";
@@ -774,7 +772,7 @@ sub deploy_rsync
 # get( $client, $path)
 sub get
 {
-    my ( $client, $path ) = @_;
+    my ( $client, $path, $excludepatternfile ) = @_;
 
     my $target;
     my $cgetmask;    # client get mask
@@ -1088,7 +1086,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.101 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.102 $)
 
 =head1 DESCRIPTION
 
