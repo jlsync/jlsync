@@ -1,7 +1,7 @@
 
 # jlsync TODO list
 #
-# $Revision: 1.10 $
+# $Revision: 1.11 $
 
 Clean up --get code. 
 * --get needs to recognise pre-existing /.mask.a~/ directories mid-path
@@ -32,8 +32,12 @@ Repository
 - allow for relative paths on jlsync command line when working in the
   repository/jlsync shell?
 
+Rsync
 - wrap rsync exec in a single function to capture output and check
   return codes.
+- replace rsync entirely with perl/jlsync implementation, possibly
+  directly of source repository.
+
 
 
 
