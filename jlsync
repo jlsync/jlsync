@@ -1,5 +1,6 @@
 #!/usr/local/bin/perl -w
 
+
 # jlsync - jlsyncronize files to many hosts from a central repository
 #
 # Jason Lee, jlsync@jason-lee.net.au, March 2002
@@ -17,7 +18,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.103 2005/11/27 20:38:46 plastic Exp $
+# $Id: jlsync,v 1.104 2005/12/11 22:28:42 plastic Exp $
 
 use Readonly;
 use strict;
@@ -76,7 +77,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.103 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.104 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -356,20 +357,29 @@ sub matching_clients
 
 ######################################################
 
-# data structure
-# directory hash { fileone => filehash,  filetwo => filehash }
-# filehash { lstat => (normal lstat array),
-#	     type => "f" or "d" or "l",
-#	     srcpath => "/src/dir/full/path",
-#	     dir => dirhash ,
-#            link => "link/target" ,
-#  ????      control => {
-#                         a => { maska => filehash, maskb => filehas, ... }
-#                         d => { maska => filehash, maskb => filehas, ... }
-#                         e => { maska => filehash, maskb => filehas, ... }
-#                        }
-#            }
+# data structures
+#
+# directory_hash =  { fileone => filehash,  filetwo => filehash }
+#
+# file_hash  = { 
+#       lstat    => [normal lstat array],
+#	    type     => "f"ile or "d"rectory or sym"l"ink,
+#	    srcpath  => "/src/dir/full/path",
+#
+#	    dir      => directory_hash_ref ,  # only if a directory
+#       readlink => "link/target" ,       # only if a a symlink
+#
+# considering...     control => control_hash_ref   # only if control file 
+#       }
+#
+# to be defined...
+# control_hash => {
+#               a => { maska => filehash, maskb => filehash, ... }
+#               d => { maska => filehash, maskb => filehash, ... }
+#               e => { maska => filehash, maskb => filehash, ... }
+#                 }
 
+# srcdir( /dir/path ) returns a directory_hash rooted at /dir/path
 sub srcdir
 {
     my ($dir) = @_;
@@ -389,6 +399,7 @@ sub srcdir
     return %dirh;
 }
 
+# srcfile( /file/or/dir/path ) returns a file_hash for /file/or/dir/path
 sub srcfile
 {
     my ($filename) = @_;
@@ -421,11 +432,13 @@ sub srcfile
     return %fileh;
 }
 
+# usage() print and exit.
 sub usage
 {
     print "jlsync usage:\n";
-    print "jlsync [--real] [--nocolor] [--verbose ] client:/path/to/pushout [more:/client/path/pairs]\n";
-    print "jlsync --get [--mask=MASK] [--real] [--nocolor] [--verbose ] client:/path/to/pullback\n";
+    print "jlsync [--real] [--nocolor] [--verbose ] client:/path/to/pushout...\n";
+    print "jlsync --get [--mask=MASK] [--real] [--nocolor] [--verbose] client:/get/path...\n";
+    print "jlsync --report [--email=user\@example.com] client:/report/path...\n";
     exit 1;
 }
 
@@ -494,13 +507,13 @@ sub rbuild_path
         my $nextpc = shift @pcs;
 
         # selectively filter controlfiles....
-        ( $filesaref, $excludearef ) = filtercontrolfiles( [ keys %{$srch} ], $nextpc, $srch , $masksref);
+        ( $filesaref, $excludearef ) = filtercontrolfiles( $nextpc, $srch , $masksref);
 
         $path = join "/", @pcs;    # remaining path.
     }
     else
     {
-        ( $filesaref, $excludearef ) = filtercontrolfiles( [ keys %{$srch} ], undef, $srch , $masksref);
+        ( $filesaref, $excludearef ) = filtercontrolfiles( undef, $srch , $masksref);
     }
 
     @excludepatterns = map { $dest . "/" . $_ } @{$excludearef};
@@ -508,12 +521,6 @@ sub rbuild_path
     foreach my $srcname ( @{$filesaref} )
     {
         my $stgname = $srcname;
-
-        #print "srcname is $srcname \n";
-        #print "type is  $srch->{$srcname}{type} \n";
-        #print "lstat is " . join(",", $srch->{$srcname}{lstat}) . "\n";
-        #print "dir is " .  $srch->{$srcname}{dir} . "\n";
-        #print "readlink is " .  $srch->{$srcname}{readlink} . "\n";
 
         if ( $stgname =~ m|(.*)\.\w[\w\-\,]*\.a\~$| )
         {
@@ -581,11 +588,11 @@ sub rbuild_path
 #
 sub filtercontrolfiles
 {
-    my @file_list      = @{ $_[0] };
-    my $basenamefilter = $_[1];
-    my $srchref        = $_[2];
-    my @masks          = @{$_[3]};
+    my $basenamefilter = $_[0];
+    my $srchref        = $_[1];
+    my @masks          = @{$_[2]};
 
+    my @file_list     = (keys %{$srchref} );
     my @filtered_list = @file_list;
 
     if ( defined($basenamefilter) )
@@ -810,9 +817,6 @@ sub get
         $target = $src . $path . "." . $cgetmask . ".a\~";
     }
 
-    # now copy files from destination back into staging
-    # - no could overwrite contents of hard linked files?
-
     # TODO: what is the --backup stragegy here????
     # TODO: considier --link-dest instead of --copy-dest?
 
@@ -833,99 +837,8 @@ sub get
 
     # full path search to determine repository original version...
 
-    my $ap = '';        # accumulated path
-    my $pc;             # path component
-    my @pcs = split "/", $path;
-    shift @pcs;         # strip leading null before /(root directory.
+    my ( $ap , $found ) = locate_path($path, \%srch, $client);     # accumulated path
 
-    my $found = 'yes';
-
-PATHLOOP: foreach $pc (@pcs)
-    {
-        my $tap = $ap . '/' . $pc;
-
-        # special code to check for basename.mask1,mask2.a~ files. grr.
-
-        my %cfh;        # control file hash
-        opendir( AP, $src . "/" . $ap ) || die "could not open $ap \! \n";
-        my $nextfile;
-        while ( defined( $nextfile = readdir(AP) ) )
-        {
-            next                              if $nextfile !~ /^$pc/;
-            print "\nnextfile is $nextfile\n" if $verbose;
-            if ( $nextfile =~ /$pc\.($MASKS_RE)\.($CONTROL_FILE_TYPE_RE)\~$/xms )
-            {
-                my @masks = split( ",", $1 );
-                my $type  = $2;
-
-                foreach my $mask (@masks)
-                {
-                    if ( !defined( $cfh{$mask}{$type} ) )
-                    {
-                        print "mask $mask type $type file $nextfile\n"
-                            if $verbose;
-                        $cfh{$mask}{$type} = $nextfile;
-                    }
-                    else
-                    {
-                        print "ERROR duplicate control file with same mask at $cfh{$type}{$mask} AND $nextfile \n";
-                        exit 0;
-
-                    }
-                }
-            }
-        }
-        closedir(AP);
-
-        ##
-        ## BUG. all these -e tests below fail on symlinks when
-        ## the symlink target does not exist on the jlsync
-        ## repository machine
-        ## symlinks can be the last path component
-        ## the last path component
-        ##
-        ##
-
-        foreach my $tmask ( reverse @{ $masks_of{$client} } )
-        {
-            if ( -e "${src}/${tap}.${tmask}.a~" )
-            {
-
-                # this is the path to remember
-                $ap = $tap . ".${tmask}.a~";
-                next PATHLOOP;
-            }
-            elsif ( -e "${src}/${tap}.${tmask}.d~" )
-            {
-
-                # warning/error target is current masked by ~d
-                print YELLOW . ON_WHITE . "WARNING: --get target pathname is masked by control file ${src}/${tap}.${tmask}.d~" . RESET . "\n";
-
-            }
-            elsif ( -e "${src}/${tap}.${tmask}.e~" )
-            {
-
-                # warning/error target is current masked by ~e ( rsync get probably won't work )
-                print YELLOW . ON_WHITE . "WARNING: --get target pathname is masked by control file ${src}/${tap}.${tmask}.e~" . "\n" . "WARNING: rsync probably won't work" . RESET . "\n";
-
-            }
-        }
-
-        # else DEFAULT files without any mask
-        if ( -e "${src}/${tap}" )
-        {
-
-            # this is the path to remember
-            $ap = $tap;
-        }
-        else
-        {
-
-            # path not found in repository.
-            $found = 'no';
-            last PATHLOOP;
-        }
-    }
 
     print "Accumlated path is $ap\n" if $verbose;
     print "Was the target path found in the source repository?: $found\n"
@@ -1051,6 +964,50 @@ PATHLOOP: foreach $pc (@pcs)
 
 }
 
+# locate_path($path) in from src_hash and return /src/path and found?yes|no
+sub locate_path
+{
+    my ($path, $srch_ref, $client ) = @_;
+
+    return "" if ( !defined($path)) ;
+
+    my @pcs    = split "/", $path;
+
+    my $tap = "";
+    my $srch = $srch_ref;
+
+    PATHLOOP: foreach my $pc (@pcs)
+    {
+        my ( $filesaref, $excludearef ) = filtercontrolfiles( $pc, $srch , $masks_of{$client});
+        my $matching_pc = ${$filesaref}[0];
+
+        $tap .= $matching_pc;
+
+        if ( $srch->{$matching_pc}{type} eq "f" )
+        {
+            print "matching_pc $matching_pc is a file\n" if $verbose;
+            last PATHLOOP;
+        }
+        elsif ( $srch->{$matching_pc}{type} eq "d" )
+        {
+            print "matching_pc $matching_pc is a dir\n" if $verbose;
+
+        }
+        elsif ( $srch->{$matching_pc}{type} eq "l" )
+        {
+            print "matching_pc $matching_pc is a symlink\n" if $verbose;
+            # deference symlink
+            my $target = $srch->{$matching_pc}{readlink};
+            last PATHLOOP;
+        }
+
+        $srch = $srch->{$matching_pc}{dir}; 
+    }
+
+    return [ $tap, "yes" ];
+}
+
+
 # spin code taken from http://dreamscape.org/code/spin - slf@dreamscape.org - steven fountain
 sub spin
 {
@@ -1095,7 +1052,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.103 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.104 $)
 
 =head1 DESCRIPTION
 
