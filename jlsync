@@ -18,7 +18,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.105 2005/12/13 21:06:35 plastic Exp $
+# $Id: jlsync,v 1.106 2006/01/09 16:15:20 plastic Exp $
 
 use Readonly;
 use strict;
@@ -77,7 +77,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.105 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.106 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -840,7 +840,7 @@ sub get
     my ( $ap , $found ) = locate_path($path, \%srch, $client);     # accumulated path
 
 
-    $verbose =1;
+    $verbose=1;
     print "Accumlated path is $ap\n" if $verbose;
     print "Was the target path found in the source repository?: $found\n"
         if $verbose;
@@ -851,8 +851,6 @@ sub get
 
     # maybe need to add check if a directory is being replaced with a file.
     # decide what to do, then...
-
-    # symlink up again? or use rdist?
 
     my $possiblesource2;
     my $possiblesource;
@@ -876,9 +874,17 @@ sub get
         my $nfiles = "";
         if ( -d $srcap )
         {
+            # this code should be using the %srch
             $nfiles = `find $srcap -print | wc -l`;
             $nfiles =~ s/\D//g;
             $nfiles = "( number of files: $nfiles )";
+            my $ncontrolfiles = `find $srcap -name \*\\.\*\\.\~ -print | wc -l`;
+            $ncontrolfiles =~ s/\D//g;
+            $nfiles .= " ( number of control files: $ncontrolfiles )";
+        }
+        if ( -l $srcap )
+        {
+            printf "need to finish this code\n";
         }
         print ON_WHITE . BLUE . "$srcap $confirmed $nfiles" . RESET . "\n";
         chdir dirname($srcap);
@@ -887,22 +893,22 @@ sub get
         print RESET;
     }
 
-    if ( -e $stgget )
-    {
-        print "current stage area ( $stg ) version for $client is\n";
-        my $nfiles = "";
-        if ( -d $stgget )
-        {
-            $nfiles = `find $stgget -print | wc -l`;
-            $nfiles =~ s/\D//g;
-            $nfiles = "( number of files: $nfiles )";
-        }
-        print ON_WHITE . BLUE . "$stgget $nfiles" . RESET . "\n";
-        chdir dirname($stgget);
-        print GREEN;
-        system "ls", "-ld", basename($stgget);
-        print RESET;
-    }
+#    if ( -e $stgget )
+#    {
+#        print "current stage area ( $stg ) version for $client is\n";
+#        my $nfiles = "";
+#        if ( -d $stgget )
+#        {
+#            $nfiles = `find $stgget -print | wc -l`;
+#            $nfiles =~ s/\D//g;
+#            $nfiles = "( number of files: $nfiles )";
+#        }
+#        print ON_WHITE . BLUE . "$stgget $nfiles" . RESET . "\n";
+#        chdir dirname($stgget);
+#        print GREEN;
+#        system "ls", "-ld", basename($stgget);
+#        print RESET;
+#    }
 
     if ( -e $target && ( $target ne $srcap ) )
     {
@@ -913,6 +919,9 @@ sub get
             $nfiles = `find $target -print | wc -l`;
             $nfiles =~ s/\D//g;
             $nfiles = "( number of files: $nfiles )";
+            my $ncontrolfiles = `find $target -name \*\\.\*\\.\~ -print | wc -l`;
+            $ncontrolfiles =~ s/\D//g;
+            $nfiles .= " ( number of control files: $ncontrolfiles )";
         }
         print ON_WHITE . BLUE . "$target $nfiles" . RESET . "\n";
         chdir dirname($target);
@@ -1021,7 +1030,6 @@ sub locate_path
                 $accumulated_path .= "/" . $pc;
         }
     }
-
     return ( $accumulated_path, $still_searching );
 }
 
@@ -1070,7 +1078,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.105 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.106 $)
 
 =head1 DESCRIPTION
 
