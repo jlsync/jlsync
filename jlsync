@@ -18,7 +18,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.106 2006/01/09 16:15:20 plastic Exp $
+# $Id: jlsync,v 1.107 2006/01/11 18:32:40 plastic Exp $
 
 use Readonly;
 use strict;
@@ -77,7 +77,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.106 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.107 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -854,6 +854,7 @@ sub get
 
     my $possiblesource2;
     my $possiblesource;
+    my $ncontrolfiles;
 
     if ( $found eq 'yes' )
     {
@@ -878,7 +879,7 @@ sub get
             $nfiles = `find $srcap -print | wc -l`;
             $nfiles =~ s/\D//g;
             $nfiles = "( number of files: $nfiles )";
-            my $ncontrolfiles = `find $srcap -name \*\\.\*\\.\~ -print | wc -l`;
+            $ncontrolfiles = `find $srcap -name \*\\.\*\\.\~ -print | wc -l`;
             $ncontrolfiles =~ s/\D//g;
             $nfiles .= " ( number of control files: $ncontrolfiles )";
         }
@@ -946,6 +947,7 @@ sub get
     print RESET;
 
     my $yes = 0;
+    my $keep_controlfiles = 0;
     unless ($real)
     {
         print "this will be copied to...\n";
@@ -953,6 +955,14 @@ sub get
         if ( prompt( -yes1, 'would your like replace files for real? ' ) )
         {
             $yes = 1;
+        }
+
+        if ( $ncontrolfiles)
+        {
+            if ( prompt( -yes1, 'would your like keep existing control files? ' ) )
+            {
+                $keep_controlfiles = 1;
+            }
         }
     }
 
@@ -972,6 +982,8 @@ sub get
         rename( $stggettmppath, $target )
             || die "unable to rename $stggettmp to $target";
         print "done." . RESET . "\n";
+
+        # need to add $keep_controlfiles code.....
     }
 
 }
@@ -1078,7 +1090,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.106 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.107 $)
 
 =head1 DESCRIPTION
 
