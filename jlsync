@@ -18,7 +18,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.108 2006/01/14 15:29:38 plastic Exp $
+# $Id: jlsync,v 1.109 2006/01/14 21:10:00 plastic Exp $
 
 use Readonly;
 use strict;
@@ -59,6 +59,7 @@ use File::Basename;
 use Getopt::Long;
 use Mail::Mailer;
 use File::Pid;
+use File::Find;
 
 Readonly my $MASK_RE              => qr{ \w[\w-]* }xms;
 Readonly my $MASKS_RE             => qr{ $MASK_RE (:? , $MASK_RE )* }xms;
@@ -77,7 +78,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.108 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.109 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -840,12 +841,7 @@ sub get
     my ( $ap , $found ) = locate_path($path, \%srch, $client);     # accumulated path
 
 
-    $verbose=1;
-    print "Accumlated path is $ap\n" if $verbose;
-    print "Was the target path found in the source repository?: $found\n"
-        if $verbose;
-
-    return;
+    print "Accumlated path is $ap , found in the source repository?: $found\n" if $verbose;
 
     my $srcap = $src . $ap;
 
@@ -876,12 +872,11 @@ sub get
         if ( -d $srcap )
         {
             # this code should be using the %srch
-            $nfiles = `find $srcap -print | wc -l`;
-            $nfiles =~ s/\D//g;
-            $nfiles = "( number of files: $nfiles )";
-            $ncontrolfiles = `find $srcap -name \*\\.\*\\.\~ -print | wc -l`;
-            $ncontrolfiles =~ s/\D//g;
-            $nfiles .= " ( number of control files: $ncontrolfiles )";
+            $nfiles = 0;
+            find( sub { $nfiles++ unless  m{ ^( \. | \.\. )$ }xms; }, $srcap);
+            $nfiles = "($nfiles files)";
+            find( sub { $ncontrolfiles++ if  m{ $CONTROL_FILE_RE }xms; }, $srcap);
+            $nfiles .= " ($ncontrolfiles control)";
         }
         if ( -l $srcap )
         {
@@ -892,6 +887,7 @@ sub get
         print GREEN;
         system "ls", "-ld", basename($srcap);
         print RESET;
+
     }
 
 #    if ( -e $stgget )
@@ -917,12 +913,12 @@ sub get
         my $nfiles = "";
         if ( -d $target )
         {
-            $nfiles = `find $target -print | wc -l`;
-            $nfiles =~ s/\D//g;
-            $nfiles = "( number of files: $nfiles )";
-            my $ncontrolfiles = `find $target -name \*\\.\*\\.\~ -print | wc -l`;
-            $ncontrolfiles =~ s/\D//g;
-            $nfiles .= " ( number of control files: $ncontrolfiles )";
+            $nfiles = 0;
+            find( sub { $nfiles++ unless  m{ ^( \. | \.\. )$ }xms; }, $target);
+            $nfiles = "($nfiles files)";
+            my $ncontrolfiles = 0;
+            find( sub { $ncontrolfiles++ if  m{ $CONTROL_FILE_RE }xms; }, $target);
+            $nfiles .= " ($ncontrolfiles control)";
         }
         print ON_WHITE . BLUE . "$target $nfiles" . RESET . "\n";
         chdir dirname($target);
@@ -935,9 +931,9 @@ sub get
     my $nfiles = "";
     if ( -d $stggettmppath )
     {
-        $nfiles = `find $stggettmp -print | wc -l`;
-        $nfiles =~ s/\D//g;
-        $nfiles = "( number of files: $nfiles )";
+        $nfiles = 0;
+        find( sub { $nfiles++ unless  m{ ^( \. | \.\. )$ }xms; }, $srcap);
+        $nfiles = "($nfiles files)";
     }
 
     print ON_WHITE . BLUE . "$stggettmppath $nfiles" . RESET . "\n";
@@ -955,13 +951,13 @@ sub get
         if ( prompt( -yes1, 'would your like replace files for real? ' ) )
         {
             $yes = 1;
-        }
 
-        if ( $ncontrolfiles)
-        {
-            if ( prompt( -yes1, 'would your like keep existing control files? ' ) )
+            if ( $ncontrolfiles)
             {
-                $keep_controlfiles = 1;
+                if ( prompt( -yes1, 'would your like keep existing control files? ' ) )
+                {
+                    $keep_controlfiles = 1;
+                }
             }
         }
     }
@@ -995,51 +991,52 @@ sub locate_path
 
     return "" if ( !defined($path)) ;
 
+    $path =~ s{ (^/|/$) }{}xmsg; # strip leading or trailing / 
+
     my @pcs    = split "/", $path;
 
     my $accumulated_path = "";
     my $srch = $srch_ref;
     my $still_searching = "yes";
 
-    PATHLOOP: foreach my $pc (@pcs)
+    foreach my $npc (@pcs)
     {
 
         if ( $still_searching eq "yes" )
         {
-            my ( $filesaref, $excludearef ) = filtercontrolfiles( $pc, $srch , $masks_of{$client});
+            my ( $filesaref, $excludearef ) = filtercontrolfiles( $npc, $srch , $masks_of{$client});
             my $matching_pc = ${$filesaref}[0];
 
             if ( ! defined( $matching_pc) )
             {
-                $accumulated_path .= "/" . $pc;
+                $accumulated_path .= "/" . $npc;
                 $still_searching = "no";
             }
             else
             {
                 $accumulated_path .= "/" . $matching_pc;
 
-                if ( $srch->{$matching_pc}{type} eq "f" )
+                if ( $srch->{$matching_pc}->{type} eq "f" )
                 {
                     print "matching_pc $matching_pc is a file\n" if $verbose;
                 }
-                elsif ( $srch->{$matching_pc}{type} eq "d" )
+                elsif ( $srch->{$matching_pc}->{type} eq "d" )
                 {
                     print "matching_pc $matching_pc is a dir\n" if $verbose;
-
                 }
-                elsif ( $srch->{$matching_pc}{type} eq "l" )
+                elsif ( $srch->{$matching_pc}->{type} eq "l" )
                 {
                     print "matching_pc $matching_pc is a symlink\n" if $verbose;
                     # deference symlink
-                    my $target = $srch->{$matching_pc}{readlink};
+                    my $target = $srch->{$matching_pc}->{readlink};
                 }
 
-                $srch = $srch->{$matching_pc}{dir}; 
+                $srch = $srch->{$matching_pc}->{dir}; 
             }
         }
         else
         {
-                $accumulated_path .= "/" . $pc;
+                $accumulated_path .= "/" . $npc;
         }
     }
     return ( $accumulated_path, $still_searching );
@@ -1049,64 +1046,22 @@ sub locate_path
 # jl_find($src_hash, $regex)  return list(s?) of paths found in $src_hash matching $regex
 sub jl_find
 {
-
     my ( $src_hash, $regex ) = @_;
 
+    my @matches; 
 
-    # could do a recursive solution here.....???????????
-
-    my ($path, $srch_ref, $client ) = @_;
-
-    return "" if ( !defined($path)) ;
-
-    my @pcs    = split "/", $path;
-
-    my $accumulated_path = "";
-    my $srch = $srch_ref;
-    my $still_searching = "yes";
-
-    PATHLOOP: foreach my $pc (@pcs)
+    foreach my $file ( keys %{$src_hash} )
     {
-
-        if ( $still_searching eq "yes" )
+        if ( $file =~ m{ $regex }xms )
         {
-            my ( $filesaref, $excludearef ) = filtercontrolfiles( $pc, $srch , $masks_of{$client});
-            my $matching_pc = ${$filesaref}[0];
-
-            if ( ! defined( $matching_pc) )
-            {
-                $accumulated_path .= "/" . $pc;
-                $still_searching = "no";
-            }
-            else
-            {
-                $accumulated_path .= "/" . $matching_pc;
-
-                if ( $srch->{$matching_pc}{type} eq "f" )
-                {
-                    print "matching_pc $matching_pc is a file\n" if $verbose;
-                }
-                elsif ( $srch->{$matching_pc}{type} eq "d" )
-                {
-                    print "matching_pc $matching_pc is a dir\n" if $verbose;
-
-                }
-                elsif ( $srch->{$matching_pc}{type} eq "l" )
-                {
-                    print "matching_pc $matching_pc is a symlink\n" if $verbose;
-                    # deference symlink
-                    my $target = $srch->{$matching_pc}{readlink};
-                }
-
-                $srch = $srch->{$matching_pc}{dir}; 
-            }
+            push(@matches, $file);
         }
-        else
+        if ( $src_hash->{$file}->{type} eq "d" )
         {
-                $accumulated_path .= "/" . $pc;
+            push(@matches , map { $file . "/" . $_ } jl_find($src_hash->{$file}->{dir}, $regex ));
         }
     }
-    return ( $accumulated_path, $still_searching );
+    return @matches
 }
 
 
@@ -1154,7 +1109,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.108 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.109 $)
 
 =head1 DESCRIPTION
 
