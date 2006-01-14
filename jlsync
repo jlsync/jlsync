@@ -1,6 +1,5 @@
 #!/usr/local/bin/perl -w
 
-
 # jlsync - jlsyncronize files to many hosts from a central repository
 #
 # Jason Lee, jlsync@jason-lee.net.au, March 2002
@@ -18,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.109 2006/01/14 21:10:00 plastic Exp $
+# $Id: jlsync,v 1.110 2006/01/14 21:34:54 plastic Exp $
 
 use Readonly;
 use strict;
@@ -78,7 +77,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.109 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.110 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -105,7 +104,7 @@ my $nocolor;
 my $unjlsyncronized = 0;
 my %masks_of;
 my %hosts_with;
-my @pidfiles = (); # list of File::Pid objects.
+my @pidfiles = ();    # list of File::Pid objects.
 
 GetOptions( "real"             => \$real,       # --real
             "get"              => \$get,        # --get
@@ -157,7 +156,7 @@ foreach my $client ( keys %paths_for )
 {
     my $lockfile = "$stg/${client}-lock";
     my $pidfile = File::Pid->new( { file => $lockfile } );
-    if ( ( -f $lockfile) && (my $another_pid = $pidfile->running) )
+    if ( ( -f $lockfile ) && ( my $another_pid = $pidfile->running ) )
     {
         print "jlsync stage locked ( $lockfile ) by process id $another_pid\n";
         exit 1;
@@ -176,7 +175,7 @@ print "done.\n" unless $silent;
 
 foreach my $client ( keys %paths_for )
 {
-    build_image($client, "$stg/$client");
+    build_image( $client, "$stg/$client" );
 }
 
 foreach my $client ( keys %paths_for )
@@ -221,7 +220,7 @@ foreach my $client ( keys %paths_for )
     }
 }
 
-foreach my $pidfile ( @pidfiles )
+foreach my $pidfile (@pidfiles)
 {
     $pidfile->remove or warn "could not unlike pid file\n";
 }
@@ -362,7 +361,7 @@ sub matching_clients
 #
 # directory_hash =  { fileone => filehash,  filetwo => filehash }
 #
-# file_hash  = { 
+# file_hash  = {
 #       lstat    => [normal lstat array],
 #	    type     => "f"ile or "d"rectory or sym"l"ink,
 #	    srcpath  => "/src/dir/full/path",
@@ -370,7 +369,7 @@ sub matching_clients
 #	    dir      => directory_hash_ref ,  # only if a directory
 #       readlink => "link/target" ,       # only if a a symlink
 #
-# considering...     control => control_hash_ref   # only if control file 
+# considering...     control => control_hash_ref   # only if control file
 #       }
 #
 # to be defined...
@@ -448,9 +447,9 @@ sub usage
 #
 sub build_image
 {
-    my ($client, $image_dir) = @_;
+    my ( $client, $image_dir ) = @_;
 
-    print "masks are " . BLUE . BOLD . join( " ", @{$masks_of{$client}} ) . RESET . ".\n"
+    print "masks are " . BLUE . BOLD . join( " ", @{ $masks_of{$client} } ) . RESET . ".\n"
         unless $silent;
 
     my $stgclient = "$stg/$client";
@@ -508,13 +507,13 @@ sub rbuild_path
         my $nextpc = shift @pcs;
 
         # selectively filter controlfiles....
-        ( $filesaref, $excludearef ) = filtercontrolfiles( $nextpc, $srch , $masksref);
+        ( $filesaref, $excludearef ) = filtercontrolfiles( $nextpc, $srch, $masksref, 0 );
 
         $path = join "/", @pcs;    # remaining path.
     }
     else
     {
-        ( $filesaref, $excludearef ) = filtercontrolfiles( undef, $srch , $masksref);
+        ( $filesaref, $excludearef ) = filtercontrolfiles( undef, $srch, $masksref, 0 );
     }
 
     @excludepatterns = map { $dest . "/" . $_ } @{$excludearef};
@@ -591,9 +590,10 @@ sub filtercontrolfiles
 {
     my $basenamefilter = $_[0];
     my $srchref        = $_[1];
-    my @masks          = @{$_[2]};
+    my @masks          = @{ $_[2] };
+    my $be_quiet       = $_[3];
 
-    my @file_list     = (keys %{$srchref} );
+    my @file_list     = ( keys %{$srchref} );
     my @filtered_list = @file_list;
 
     if ( defined($basenamefilter) )
@@ -609,7 +609,7 @@ sub filtercontrolfiles
     }
     else
     {
-        spin();
+        spin() unless ( $silent || $be_quiet );
     }
 
     foreach my $mask ( reverse @masks )
@@ -618,10 +618,10 @@ sub filtercontrolfiles
         my $a;
         foreach $a (@alist)
         {
-            nospin() unless $silent;
+            nospin() unless ( $silent || $be_quiet );
 
             # TODO : add symlink add/print case below
-            print GREEN . "add:$srchref->{$a}->{srcpath}" . ( $srchref->{$a}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
+            print GREEN . "add:$srchref->{$a}->{srcpath}" . ( $srchref->{$a}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless ( $silent || $be_quiet );
             ( my $basename = $a ) =~ s{ \. ($MASK_RE,)* $mask (,$MASK_RE)* \.a~$ }{}xms;
             @filtered_list = grep { !m/^\Q$basename\E$/ } @filtered_list;
             @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms } @filtered_list;
@@ -632,10 +632,10 @@ sub filtercontrolfiles
         my $d;
         foreach $d (@dlist)
         {
-            nospin() unless $silent;
+            nospin() unless ( $silent || $be_quiet );
 
             # bug on this next line. we want to test file type (is it a directory?) of control file target, not control file itself.
-            print RED . "del:$srchref->{$d}->{srcpath}" . ( $srchref->{$d}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless $silent;
+            print RED . "del:$srchref->{$d}->{srcpath}" . ( $srchref->{$d}->{type} eq "d" ? "/" : "" ) . RESET . "\n" unless ( $silent || $be_quiet );
             ( my $basename = $d ) =~ s/\.( $MASK_RE ,)* $mask (,$MASK_RE )* \.d~ $//xms;
             @filtered_list = grep { !m/^\Q$basename\E$/ } @filtered_list;
             @filtered_list = grep { !m/^ \Q$basename\E \. $CONTROL_FILE_EXT_RE $/xms } @filtered_list;
@@ -789,7 +789,7 @@ sub get
 
     my $target;
     my $cgetmask;    # client get mask
-    my $stggetroot    = $stg . "/" . $client ;
+    my $stggetroot    = $stg . "/" . $client;
     my $stgget        = $stg . "/" . $client . $path;
     my $srcget        = $src . $path;
     my $stggettmp     = $stg . "/" . $client . "-get";
@@ -838,8 +838,7 @@ sub get
 
     # full path search to determine repository original version...
 
-    my ( $ap , $found ) = locate_path($path, \%srch, $client);     # accumulated path
-
+    my ( $ap, $found ) = locate_path( $path, \%srch, $client );    # accumulated path
 
     print "Accumlated path is $ap , found in the source repository?: $found\n" if $verbose;
 
@@ -871,11 +870,12 @@ sub get
         my $nfiles = "";
         if ( -d $srcap )
         {
+
             # this code should be using the %srch
             $nfiles = 0;
-            find( sub { $nfiles++ unless  m{ ^( \. | \.\. )$ }xms; }, $srcap);
+            find( sub { $nfiles++ unless m{ ^( \. | \.\. )$ }xms; }, $srcap );
             $nfiles = "($nfiles files)";
-            find( sub { $ncontrolfiles++ if  m{ $CONTROL_FILE_RE }xms; }, $srcap);
+            find( sub { $ncontrolfiles++ if m{ $CONTROL_FILE_RE }xms; }, $srcap );
             $nfiles .= " ($ncontrolfiles control)";
         }
         if ( -l $srcap )
@@ -890,22 +890,22 @@ sub get
 
     }
 
-#    if ( -e $stgget )
-#    {
-#        print "current stage area ( $stg ) version for $client is\n";
-#        my $nfiles = "";
-#        if ( -d $stgget )
-#        {
-#            $nfiles = `find $stgget -print | wc -l`;
-#            $nfiles =~ s/\D//g;
-#            $nfiles = "( number of files: $nfiles )";
-#        }
-#        print ON_WHITE . BLUE . "$stgget $nfiles" . RESET . "\n";
-#        chdir dirname($stgget);
-#        print GREEN;
-#        system "ls", "-ld", basename($stgget);
-#        print RESET;
-#    }
+    #    if ( -e $stgget )
+    #    {
+    #        print "current stage area ( $stg ) version for $client is\n";
+    #        my $nfiles = "";
+    #        if ( -d $stgget )
+    #        {
+    #            $nfiles = `find $stgget -print | wc -l`;
+    #            $nfiles =~ s/\D//g;
+    #            $nfiles = "( number of files: $nfiles )";
+    #        }
+    #        print ON_WHITE . BLUE . "$stgget $nfiles" . RESET . "\n";
+    #        chdir dirname($stgget);
+    #        print GREEN;
+    #        system "ls", "-ld", basename($stgget);
+    #        print RESET;
+    #    }
 
     if ( -e $target && ( $target ne $srcap ) )
     {
@@ -914,10 +914,10 @@ sub get
         if ( -d $target )
         {
             $nfiles = 0;
-            find( sub { $nfiles++ unless  m{ ^( \. | \.\. )$ }xms; }, $target);
+            find( sub { $nfiles++ unless m{ ^( \. | \.\. )$ }xms; }, $target );
             $nfiles = "($nfiles files)";
             my $ncontrolfiles = 0;
-            find( sub { $ncontrolfiles++ if  m{ $CONTROL_FILE_RE }xms; }, $target);
+            find( sub { $ncontrolfiles++ if m{ $CONTROL_FILE_RE }xms; }, $target );
             $nfiles .= " ($ncontrolfiles control)";
         }
         print ON_WHITE . BLUE . "$target $nfiles" . RESET . "\n";
@@ -932,7 +932,7 @@ sub get
     if ( -d $stggettmppath )
     {
         $nfiles = 0;
-        find( sub { $nfiles++ unless  m{ ^( \. | \.\. )$ }xms; }, $srcap);
+        find( sub { $nfiles++ unless m{ ^( \. | \.\. )$ }xms; }, $srcap );
         $nfiles = "($nfiles files)";
     }
 
@@ -942,7 +942,7 @@ sub get
     system "ls", "-ld", basename($stggettmppath);
     print RESET;
 
-    my $yes = 0;
+    my $yes               = 0;
     my $keep_controlfiles = 0;
     unless ($real)
     {
@@ -952,7 +952,7 @@ sub get
         {
             $yes = 1;
 
-            if ( $ncontrolfiles)
+            if ($ncontrolfiles)
             {
                 if ( prompt( -yes1, 'would your like keep existing control files? ' ) )
                 {
@@ -987,27 +987,27 @@ sub get
 # locate_path($path) in from src_hash and return /src/path and found?yes|no
 sub locate_path
 {
-    my ($path, $srch_ref, $client ) = @_;
+    my ( $path, $srch_ref, $client ) = @_;
 
-    return "" if ( !defined($path)) ;
+    return "" if ( !defined($path) );
 
-    $path =~ s{ (^/|/$) }{}xmsg; # strip leading or trailing / 
+    $path =~ s{ (^/|/$) }{}xmsg;    # strip leading or trailing /
 
-    my @pcs    = split "/", $path;
+    my @pcs = split "/", $path;
 
     my $accumulated_path = "";
-    my $srch = $srch_ref;
-    my $still_searching = "yes";
+    my $srch             = $srch_ref;
+    my $still_searching  = "yes";
 
     foreach my $npc (@pcs)
     {
 
         if ( $still_searching eq "yes" )
         {
-            my ( $filesaref, $excludearef ) = filtercontrolfiles( $npc, $srch , $masks_of{$client});
+            my ( $filesaref, $excludearef ) = filtercontrolfiles( $npc, $srch, $masks_of{$client}, 1 );
             my $matching_pc = ${$filesaref}[0];
 
-            if ( ! defined( $matching_pc) )
+            if ( !defined($matching_pc) )
             {
                 $accumulated_path .= "/" . $npc;
                 $still_searching = "no";
@@ -1027,43 +1027,42 @@ sub locate_path
                 elsif ( $srch->{$matching_pc}->{type} eq "l" )
                 {
                     print "matching_pc $matching_pc is a symlink\n" if $verbose;
+
                     # deference symlink
                     my $target = $srch->{$matching_pc}->{readlink};
                 }
 
-                $srch = $srch->{$matching_pc}->{dir}; 
+                $srch = $srch->{$matching_pc}->{dir};
             }
         }
         else
         {
-                $accumulated_path .= "/" . $npc;
+            $accumulated_path .= "/" . $npc;
         }
     }
     return ( $accumulated_path, $still_searching );
 }
-
 
 # jl_find($src_hash, $regex)  return list(s?) of paths found in $src_hash matching $regex
 sub jl_find
 {
     my ( $src_hash, $regex ) = @_;
 
-    my @matches; 
+    my @matches;
 
     foreach my $file ( keys %{$src_hash} )
     {
         if ( $file =~ m{ $regex }xms )
         {
-            push(@matches, $file);
+            push( @matches, $file );
         }
         if ( $src_hash->{$file}->{type} eq "d" )
         {
-            push(@matches , map { $file . "/" . $_ } jl_find($src_hash->{$file}->{dir}, $regex ));
+            push( @matches, map { $file . "/" . $_ } jl_find( $src_hash->{$file}->{dir}, $regex ) );
         }
     }
-    return @matches
+    return @matches;
 }
-
 
 # spin code taken from http://dreamscape.org/code/spin - slf@dreamscape.org - steven fountain
 sub spin
@@ -1109,7 +1108,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.109 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.110 $)
 
 =head1 DESCRIPTION
 
