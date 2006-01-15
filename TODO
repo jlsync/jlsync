@@ -1,11 +1,9 @@
 
 # jlsync TODO list
 #
-# $Revision: 1.11 $
+# $Revision: 1.12 $
 
 Clean up --get code. 
-* --get needs to recognise pre-existing /.mask.a~/ directories mid-path
-  in the repository.
 * make --get more interactive about repository placement with no --mask
   command line given.
 * add colorised-diff option to user interaction
@@ -28,6 +26,7 @@ Deploy
 
 Repository
 - pre and post exec command control files?
+- jlsync backed-up version control file
 - add dynamic subsition (hostname, ipaddress, mask specific) control file type
 - allow for relative paths on jlsync command line when working in the
   repository/jlsync shell?
@@ -36,7 +35,7 @@ Rsync
 - wrap rsync exec in a single function to capture output and check
   return codes.
 - replace rsync entirely with perl/jlsync implementation, possibly
-  directly of source repository.
+  sync remotely drectly from source repository.
 
 
 

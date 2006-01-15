@@ -1,5 +1,5 @@
 
-# jlsync INSTALL instructions $Revision: 1.6 $
+# jlsync INSTALL instructions $Revision: 1.7 $
 
 Before you use jlsync you should be familiar with rsync.  You should
 understand exactly how powerful and how dangerous rsync can be.
@@ -15,6 +15,7 @@ The following perl modules are required:
     Want
     Readonly
     File::Pid
+    File::NCopy
 
 2. Create directories for jlsync repository and staging areas (they
 must be on the same filesystem). A dedicated filesystem mounted at
@@ -22,15 +23,16 @@ must be on the same filesystem). A dedicated filesystem mounted at
 
 mkdir /jlsync/source
 mkdir /jlsync/stage
+mkdir /jlsync/bin
+mkdir /jlsync/etc
+mkdir -p /jlsync/man/man8
 
 3. Install binaries 
 
-mkdir /jlsync/bin
 cp jlsync /jlsync/bin/jlsync
 
 4. Install man page
 
-mkdir -p /jlsync/man/man8
 perldoc jlsync > /jlsync/man/man8/jlsync.8
 
 5. Configure jlsync for your site, edit settings in the CONFIGURATION
@@ -40,7 +42,6 @@ vi /jlsync/bin/jlsync
 
 6. Create your own jlsync.config file
 
-mkdir /jlsync/etc
 cp jlsync.config /jlsync/etc/jlsync.config
 vi /jlsync/etc/jlsync.config
 

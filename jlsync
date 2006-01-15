@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.110 2006/01/14 21:34:54 plastic Exp $
+# $Id: jlsync,v 1.111 2006/01/15 17:54:08 plastic Exp $
 
 use Readonly;
 use strict;
@@ -59,6 +59,7 @@ use Getopt::Long;
 use Mail::Mailer;
 use File::Pid;
 use File::Find;
+use File::NCopy qw(copy);
 
 Readonly my $MASK_RE              => qr{ \w[\w-]* }xms;
 Readonly my $MASKS_RE             => qr{ $MASK_RE (:? , $MASK_RE )* }xms;
@@ -77,7 +78,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.110 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.111 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -795,31 +796,10 @@ sub get
     my $stggettmp     = $stg . "/" . $client . "-get";
     my $stggettmppath = $stggettmp . $path;
 
-    # if no getmask is supplied then $client is used.
-    if ( !$getmask )
-    {
-        $cgetmask = $client;
-    }
-    else
-    {
-        $cgetmask = $getmask;
-    }
-
-    if ( $cgetmask eq "DEFAULT" )
-    {
-        $target = $src . $path;
-    }
-    else
-    {
-        if ( !grep {/^\Q$cgetmask\E$/} @{ $masks_of{$client} } )
-        {
-            print BOLD . BLACK . ON_YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
-        }
-        $target = $src . $path . "." . $cgetmask . ".a\~";
-    }
-
     # TODO: what is the --backup stragegy here????
     # TODO: considier --link-dest instead of --copy-dest?
+
+    rmtree($stggettmppath); # get a fresh copy 
 
     my $command = "$rsync $rsync_opts --compress --itemize-changes --archive --delete --copy-dest=$stggetroot --backup --backup-dir=$backup_dir --links --recursive --relative --verbose";
     $command .= " --exclude-from=$excludepatternfile"
@@ -836,24 +816,59 @@ sub get
         return;
     }
 
+    print "$client version just collected is...\n";
+    my $nfiles = "";
+    if ( -d $stggettmppath )
+    {
+        $nfiles = 0;
+        find( sub { $nfiles++ unless m{ ( $CONTROL_FILE_RE  | ^( \. | \.\. )$ ) }xms; }, $stggettmppath );
+        $nfiles = "($nfiles files)";
+    }
+
+    print ON_WHITE . BLUE . "$stggettmppath $nfiles" . RESET . "\n";
+    chdir dirname($stggettmppath);
+    print GREEN;
+    system "ls", "-ld", basename($stggettmppath);
+    print RESET;
+
     # full path search to determine repository original version...
-
     my ( $ap, $found ) = locate_path( $path, \%srch, $client );    # accumulated path
-
     print "Accumlated path is $ap , found in the source repository?: $found\n" if $verbose;
 
     my $srcap = $src . $ap;
 
-    # maybe need to add check if a directory is being replaced with a file.
-    # decide what to do, then...
-
-    my $possiblesource2;
-    my $possiblesource;
-    my $ncontrolfiles;
-
-    if ( $found eq 'yes' )
+    # if no getmask is supplied then clients own is used ($client).
+    if ( !$getmask )
     {
-        print "current source repository ( $src ) version...\n";
+        $cgetmask = $client;
+    }
+    else
+    {
+        $cgetmask = $getmask;
+    }
+
+    if ( !grep {/^\Q$cgetmask\E$/} @{ $masks_of{$client} } )
+    {
+        print BOLD . BLACK . ON_YELLOW . "WARNING client $client is currently not subscribed to mask $cgetmask\n" . RESET;
+    }
+
+    my $target_basename = $srcap;
+    $target_basename =~ s{ . $CONTROL_FILE_EXT_RE $ }{}xms;
+
+    if ( $cgetmask eq "DEFAULT" )
+    {
+        $target = $target_basename;
+    }
+    else
+    {
+        $target = $target_basename . "." . $cgetmask . ".a\~";
+    }
+
+    my $nsrccontrolfiles;
+
+    if ( ( $found eq 'yes' ) && ( $target ne $srcap ) )
+    {
+        print "current jlsync repository version for $client is...\n";
         my $confirmed = '';
 
         if ( -f $srcap )
@@ -867,112 +882,102 @@ sub get
                 $confirmed = "(warning: source and stage inode mismatch)";
             }
         }
+
         my $nfiles = "";
         if ( -d $srcap )
         {
 
             # this code should be using the %srch
             $nfiles = 0;
-            find( sub { $nfiles++ unless m{ ^( \. | \.\. )$ }xms; }, $srcap );
+            find( sub { $nfiles++ unless m{ ( $CONTROL_FILE_RE  | ^( \. | \.\. )$ )  }xms; }, $srcap );
             $nfiles = "($nfiles files)";
-            find( sub { $ncontrolfiles++ if m{ $CONTROL_FILE_RE }xms; }, $srcap );
-            $nfiles .= " ($ncontrolfiles control)";
-        }
-        if ( -l $srcap )
-        {
-            printf "need to finish this code\n";
+            find( sub { $nsrccontrolfiles++ if m{ $CONTROL_FILE_RE }xms; }, $srcap );
+            $nfiles .= " ($nsrccontrolfiles control)";
         }
         print ON_WHITE . BLUE . "$srcap $confirmed $nfiles" . RESET . "\n";
         chdir dirname($srcap);
         print GREEN;
         system "ls", "-ld", basename($srcap);
         print RESET;
-
     }
 
-    #    if ( -e $stgget )
-    #    {
-    #        print "current stage area ( $stg ) version for $client is\n";
-    #        my $nfiles = "";
-    #        if ( -d $stgget )
-    #        {
-    #            $nfiles = `find $stgget -print | wc -l`;
-    #            $nfiles =~ s/\D//g;
-    #            $nfiles = "( number of files: $nfiles )";
-    #        }
-    #        print ON_WHITE . BLUE . "$stgget $nfiles" . RESET . "\n";
-    #        chdir dirname($stgget);
-    #        print GREEN;
-    #        system "ls", "-ld", basename($stgget);
-    #        print RESET;
-    #    }
-
-    if ( -e $target && ( $target ne $srcap ) )
+    my $ntargetcontrolfiles = 0;
+    print "$client version will be copied to...\n";
+    if ( -e $target )
     {
-        print "current repository target version is\n";
-        my $nfiles = "";
+        $nfiles = "(existing)";
         if ( -d $target )
         {
             $nfiles = 0;
-            find( sub { $nfiles++ unless m{ ^( \. | \.\. )$ }xms; }, $target );
+            find( sub { $nfiles++ unless m{ ( $CONTROL_FILE_RE  | ^( \. | \.\. )$ ) }xms; }, $target );
             $nfiles = "($nfiles files)";
-            my $ncontrolfiles = 0;
-            find( sub { $ncontrolfiles++ if m{ $CONTROL_FILE_RE }xms; }, $target );
-            $nfiles .= " ($ncontrolfiles control)";
+            find( sub { $ntargetcontrolfiles++ if m{ $CONTROL_FILE_RE }xms; }, $target );
+            $nfiles .= " ($ntargetcontrolfiles control)";
         }
-        print ON_WHITE . BLUE . "$target $nfiles" . RESET . "\n";
+    }
+    else
+    {
+        $nfiles = "(new)";
+    }
+    print ON_WHITE . BLUE . "$target $nfiles" . RESET . "\n";
+    if ( -e $target )
+    {
         chdir dirname($target);
         print GREEN;
         system "ls", "-ld", basename($target);
         print RESET;
     }
 
-    print "remote ( $stggettmp ) version just got is...\n";
-    my $nfiles = "";
-    if ( -d $stggettmppath )
-    {
-        $nfiles = 0;
-        find( sub { $nfiles++ unless m{ ^( \. | \.\. )$ }xms; }, $srcap );
-        $nfiles = "($nfiles files)";
-    }
-
-    print ON_WHITE . BLUE . "$stggettmppath $nfiles" . RESET . "\n";
-    chdir dirname($stggettmppath);
-    print GREEN;
-    system "ls", "-ld", basename($stggettmppath);
-    print RESET;
-
     my $yes               = 0;
-    my $keep_controlfiles = 0;
+    my $keep_controlfiles = 1;
+
     unless ($real)
     {
-        print "this will be copied to...\n";
-        print ON_WHITE . BLUE . $target . RESET . "\n";
-        if ( prompt( -yes1, 'would your like replace files for real? ' ) )
+        if ( prompt( -yes1, 'would you like to replace files for real? ' ) )
         {
             $yes = 1;
 
-            if ($ncontrolfiles)
+            if ( $ntargetcontrolfiles || $nsrccontrolfiles )
             {
-                if ( prompt( -yes1, 'would your like keep existing control files? ' ) )
+                if ( prompt( -yes1, 'would you like to keep existing control files? ' ) )
                 {
                     $keep_controlfiles = 1;
+                }
+                else
+                {
+                    $keep_controlfiles = 0;
                 }
             }
         }
     }
 
-    # TODO: it would be nice to preserve control files in any
-    # subdirectories in the repository....
-
-    # TODO: need to preserve ownership & permisions of parent directories.
-
     if ( $real || $yes )
     {
+        if ($keep_controlfiles)
+        {
+            my $copy_from = $ntargetcontrolfiles ? $target : $srcap;
+            print ON_GREEN . "copying control files from  " . ON_WHITE . BLUE . $copy_from . RESET . ON_GREEN . "... ";
+            find(
+                sub {
+                    if (m{ $CONTROL_FILE_RE }xms)
+                    {
+                        my $copy_to = ${File::Find::name};
+                        $copy_to =~ s{$copy_from}{$stggettmppath};
+                        print "copying $File::Find::name to $copy_to \n" if $verbose;
+                        copy \1, $File::Find::name, $copy_to;
+                    }
+                },
+                $copy_from
+                );
+            print "done." . RESET . "\n";
+        }
+
         print ON_GREEN . "updating " . ON_WHITE . BLUE . $target . RESET . ON_GREEN . "... ";
         print "rmtree($target)\n" if ($verbose);
         rmtree($target);
         print "mkpath" . dirname($target) . "\n" if ($verbose);
+
+        # TODO: need to preserve ownership & permisions of parent directories.
         mkpath dirname($target), 0, 0755;
         print "rename($stggettmppath, $target)\n" if ($verbose);
         rename( $stggettmppath, $target )
@@ -1108,7 +1113,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.110 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.111 $)
 
 =head1 DESCRIPTION
 

@@ -1,6 +1,9 @@
 #
-# $Id: CHANGES,v 1.7 2005/11/27 20:37:52 plastic Exp $
+# $Id: CHANGES,v 1.8 2006/01/15 17:54:08 plastic Exp $
 #
+version: 2.0 jlsync_version_1.111 2006/01/15
+- --get code mostly rewritten for improved interactive behaviour and
+  repository placement 
 
 version: 2.0 jlsync_version_1.103 2005/11/27
 - fixed command line bug where =MASK:/path could cause other paths to be
