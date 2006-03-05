@@ -1,4 +1,4 @@
-#!/usr/local/bin/ruby
+#!/usr/local/bin/ruby -w
 
 require "fileutils";
 
@@ -45,13 +45,14 @@ class Node
         puts self.fullpath
         destname = destdir +  "/" + @name
         if self.file?
-            FileUtils.ln( @origpath, destname)
+            FileUtils.ln @origpath, destname
         elsif self.directory?
-            FileUtils.mkdir destname # , @stat.mode.to_s
+            FileUtils.mkdir destname, :mode => @stat.mode & 07777 
+            FileUtils.chown @stat.uid.to_s, @stat.gid.to_s, destname
             nodes.each { |n| n.replicate(destname) }
-            FileUtils.touch destname # , @stat.mtime
+            File.utime @stat.atime, @stat.mtime, destname 
         elsif self.symlink?
-            FileUtils.ln_s( @origpath, destname)
+            FileUtils.ln_s @origpath, destname
         else
             puts "unknown file type! " + @origpath
         end
