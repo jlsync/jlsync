@@ -12,21 +12,19 @@ class Config
         @masks_of = {}
         @hosts_with = {}
         # read in config_file
-        File.open(config_file) do |file|
-            while line = file.gets
-                next if line =~ /^#|^\s*$/
-                masks = line.chomp.split(/\s+/)
-                if ( @masks_of[masks.last] )
-                    puts "Error duplicat entries for #{masks.last} in #{config_file}. exiting. "
-                    exit 1  # exception!
-                else
-                    @masks_of[masks.last] = masks
-                    masks.each do |mask|
-                        if @hosts_with[mask]
-                            @hosts_with[mask] << masks.last
-                        else
-                            @hosts_with[mask] = [ masks.last ]
-                        end
+        File.open(config_file).readlines.each do |line|
+            next if line =~ /^#|^\s*$/
+            masks = line.chomp.split(/\s+/)
+            if ( @masks_of[masks.last] )
+                puts "Error duplicat entries for #{masks.last} in #{config_file}. exiting. "
+                exit 1  # exception!
+            else
+                @masks_of[masks.last] = masks
+                masks.each do |mask|
+                    if @hosts_with[mask]
+                        @hosts_with[mask] << masks.last
+                    else
+                        @hosts_with[mask] = [ masks.last ]
                     end
                 end
             end
@@ -46,22 +44,94 @@ end
 
 class Node 
 
-    attr_reader :name, :nodes, :origpath
+    attr_accessor :name, :dir, :parent, :imagepath, :nodes, :exclude_patterns
+    attr_reader   :origpath
 
-    def initialize(name, dir, parent)
-        @name = name
-        @dir = dir
-        @parent = parent
-        @origpath = dir + "/" + name
+    def source(name, dir, parent)
+        @name = name                  # my filename
+        @dir = dir                    # my directory name
+        @parent = parent              # link to parent directory Node
+        @origpath = dir + "/" + name  # my on disk location
         @stat = File.lstat(@origpath)
         if self.directory?
-            @nodes = []
+            @nodes = []               # directory entries
             Dir.entries(@origpath).each { |f|
                 next if f =~ /^(\.|\.\.)$/ 
-                @nodes << Node.new(f , @origpath , self)
+                new = Node.new
+                new.source(f , @origpath , self)
+                @nodes << new
             }
+        elsif self.symlink?
+            @readlink = File.readlink(@origpath)
         end
     end
+
+    def build_image(client, config, name="", dir="", parent=nil)
+        masks = config.masks_of(client)
+        exclude_patterns = []
+
+
+        #destname = destdir +  "/" + @name
+
+        dup = self.dup  # "shallow" copy 
+
+        dup.dir = dir
+        dup.name = name
+        dup.parent = parent
+        dup.imagepath = dir +  "/" + name
+        
+        if self.directory?
+            # need to optimise this to be top down...
+            # deep copy first...
+            dup.nodes = dup.nodes.collect { |n|
+                n.build_image(client, config, n.name, dup.imagepath, dup)
+            }
+            # ...and then apply control files.
+            dup.nodes, dup.exclude_patterns = filter_controlfiles(client, config, dup.nodes)
+
+        end
+
+        return dup  # may not want to dup regular files?
+    end
+
+    def filter_controlfiles(client, config, nodes)
+        fnodes = nodes  # filtered list of nodes
+        exclude_patterns = []
+        config.masks_of(client).reverse.each { |mask|
+
+            alist = fnodes.select { |node| node.name =~ /\.#{mask}\.a~/ }
+            alist.each { |a|
+                   puts "adding " + a.name 
+                   a.name =~ /\.#{mask}\.a~/
+                   basename = $` 
+                   basename_re = Regexp.escape( basename )
+                   fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ade]~)?$/ }
+                   a.name = basename
+                   fnodes.push a
+               }
+
+            dlist = fnodes.select { |node| node.name =~ /\.#{mask}\.d~/ }
+            dlist.each { |d|
+                   puts "delete " + d.name 
+                   d.name =~ /\.#{mask}\.d~/
+                   basename = Regexp.escape( $` )
+                   fnodes = fnodes.select { |f| f.name !~ /#{basename}(\.\w+\.[ade]~)?$/ }
+               }
+
+            elist = fnodes.select { |node| node.name =~ /\.#{mask}\.e~/ }
+            elist.each { |e|
+                   puts "excluding " + e.name 
+                   e.name =~ /\.#{mask}\.e~/
+                   basename =  $`
+                   basename_re = Regexp.escape( basename )
+                   fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ade]~)?$/ }
+                   exclude_patterns.push basename
+               }
+        }
+
+        return fnodes, exclude_patterns
+    end
+
 
     def atime
         @stat.atime
@@ -84,61 +154,52 @@ class Node
     end
 
     def replicate(destdir)
-        puts self.fullpath
+        puts destdir
         destname = destdir +  "/" + @name
+        puts destname
         if self.file?
             FileUtils.ln @origpath, destname
         elsif self.directory?
             FileUtils.mkdir destname, :mode => @stat.mode & 07777 
             FileUtils.chown @stat.uid.to_s, @stat.gid.to_s, destname
-            nodes.each { |n| n.replicate(destname) }
+            @nodes.each { |n| n.replicate(destname) }
             File.utime @stat.atime, @stat.mtime, destname 
         elsif self.symlink?
-            FileUtils.ln_s @origpath, destname
+            FileUtils.ln_s @readlink, destname
+            File.lchown @stat.uid, @stat.gid, destname
         else
             puts "unknown file type! " + @origpath
         end
     end
 
-    def build_image(destdir, client, config)
-        masks = config.masks_for(client)
-        exclude_patterns = []
-        puts self.fullpath
-        destname = destdir +  "/" + @name
-        if self.file?
-            FileUtils.ln @origpath, destname
-        elsif self.directory?
-            FileUtils.mkdir destname, :mode => @stat.mode & 07777 
-            FileUtils.chown @stat.uid.to_s, @stat.gid.to_s, destname
-            # nodes.each ... filter control files....
-            # filtered.each { |n| push'n'map exclustions  <-n.replicate(destname) }
-            
-            File.utime @stat.atime, @stat.mtime, destname 
-        elsif self.symlink?
-            FileUtils.ln_s @origpath, destname
-        else
-            puts "unknown file type! " + @origpath
-        end
-        return exclude_patterns
-    end
 
 end
 
 
 config = Config.new(jlsync_config)
-source = Node.new("", jlsync_source, nil)
+source = Node.new
+source.source("", jlsync_source, nil)
 
 stage = "/jlsync/stage/jlsync.rb"
 
 
 FileUtils.rm_rf(stage)
-#puts source.name
-#source.replicate(stage)
-#source.build_image(stage, "server94", config)
-
-puts config.hosts_with("SOLARIS")
+copy = source.build_image("server94",config)
+puts source.class
+puts source.nodes[0].nodes[0].nodes[3].nodes.each {|x| puts x.name }
+puts source.nodes[0].nodes[0].nodes[3].nodes[6].name
 puts
-puts config.masks_of("server94").join(" ")
+puts copy.class
+puts copy.nodes[0].nodes[0].nodes[3].nodes.each {|x| puts x.name }
+puts copy.nodes[0].nodes[0].nodes[3].nodes[6].name
+
+copy.replicate(stage)
+
+#image1 = source.build_image("server94", config)
+
+#puts config.hosts_with("SOLARIS")
+#puts
+#puts config.masks_of("server94").join(" ")
 
 
 
