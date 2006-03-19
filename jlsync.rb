@@ -1,6 +1,13 @@
 #!/usr/local/bin/ruby -w
 
+# jlsync.rb - jlsync in ruby
+# Jason Lee, jlsync@jason-lee.net.au, 
+# Copyright 2006 Jason Lee Pty. Ltd.
+# $Id: jlsync.rb,v 1.5 2006/03/19 13:40:24 plastic Exp $
+#
+
 require "fileutils";
+require "getoptlong";
 
 jlsync_config = "/jlsync/etc/jlsync.config"
 jlsync_source = "/jlsync/source"
@@ -171,8 +178,6 @@ class Node
             puts "unknown file type! " + @origpath
         end
     end
-
-
 end
 
 
@@ -194,12 +199,5 @@ puts copy.nodes[0].nodes[0].nodes[3].nodes.each {|x| puts x.name }
 puts copy.nodes[0].nodes[0].nodes[3].nodes[6].name
 
 copy.replicate(stage)
-
-#image1 = source.build_image("server94", config)
-
-#puts config.hosts_with("SOLARIS")
-#puts
-#puts config.masks_of("server94").join(" ")
-
 
 
