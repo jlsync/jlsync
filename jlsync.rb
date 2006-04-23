@@ -3,19 +3,64 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.5 2006/03/19 13:40:24 plastic Exp $
+# $Id: jlsync.rb,v 1.6 2006/04/23 13:24:30 plastic Exp $
 #
 
-require "fileutils";
-require "getoptlong";
+
+
+require 'rubygems'
+require_gem 'term-ansicolor'
+include Term::ANSIColor
+class String
+    include Term::ANSIColor
+end
+require "fileutils"
+
+require 'getoptlong'
+real = false
+getmask  = nil
+nocolor = false
+eport = false
+email = nil
+
+opts = GetoptLong.new(
+    [ "--real", "-r",           GetoptLong::NO_ARGUMENT],
+    [ "--mask", "-m",           GetoptLong::REQUIRED_ARGUMENT],
+    [ "--nocolor", "-n",        GetoptLong::NO_ARGUMENT],
+    [ "--report",                GetoptLong::NO_ARGUMENT],
+    [ "--email", "-e",          GetoptLong::REQUIRED_ARGUMENT]
+    )
+
+opts.each do |opt, arg|
+    case opt
+    when "--real" 
+           real = true
+    when "--mask"
+           getmask = arg
+    when "--nocolor"
+           nocolor = true
+    when "--report"
+           report = true
+    when "--email"
+           email = arg
+    end
+end
+
+
+# require "pathname"; # maybe use this standard libarary soon.
 
 jlsync_config = "/jlsync/etc/jlsync.config"
 jlsync_source = "/jlsync/source"
 
-class Config
+# Turn of the coloring
+Term::ANSIColor::coloring = false if (nocolor or (not STDOUT.isatty))
+
+
+
+
+class JlConfig
 
     def initialize(config_file)
-
         @masks_of = {}
         @hosts_with = {}
         # read in config_file
@@ -23,7 +68,7 @@ class Config
             next if line =~ /^#|^\s*$/
             masks = line.chomp.split(/\s+/)
             if ( @masks_of[masks.last] )
-                puts "Error duplicat entries for #{masks.last} in #{config_file}. exiting. "
+                puts "Error duplicat entries for #{masks.last} in #{config_file}. exiting. ".red.bold
                 exit 1  # exception!
             else
                 @masks_of[masks.last] = masks
@@ -51,8 +96,61 @@ end
 
 class Node 
 
-    attr_accessor :name, :dir, :parent, :imagepath, :nodes, :exclude_patterns
+    attr_accessor :name, :dir, :parent, :imagepath, :nodes, :exclude_patterns 
     attr_reader   :origpath
+
+    # Stat .atime .directory? .file?  .symlink?   
+    def method_missing(method_id, *args)
+        if @stat.respond_to?(method_id)
+            @stat.send(method_id, *args)
+        else
+            super
+        end
+    end
+
+    def fullpath
+        @parent ? @parent.fullpath + "/" + @name : @name
+    end
+
+    def replicate(destdir)
+        destname = destdir +  "/" + @name
+        if self.file?
+            FileUtils.ln @origpath, destname
+        elsif self.directory?
+            FileUtils.mkdir destname, :mode => @stat.mode & 07777 
+            FileUtils.chown @stat.uid.to_s, @stat.gid.to_s, destname
+            @nodes.each { |n| n.replicate(destname) }
+            File.utime @stat.atime, @stat.mtime, destname 
+        elsif self.symlink?
+            FileUtils.ln_s @readlink, destname
+            File.lchown @stat.uid, @stat.gid, destname
+        else
+            puts "unknown file type! #{@origpath}".red.bold
+        end
+    end
+
+
+    # source_root() is a modified version of source() that take only the 
+    # root directory of our source tree. 
+    def source_root(dir)
+        @name = nil      # my filename
+        @dir = dir       # my directory name
+        @parent = nil    # link to parent directory Node
+        @origpath = dir  # my on disk location
+        @stat = File.lstat(@origpath)
+        @nodes = []               # directory entries
+        if self.directory?
+            Dir.entries(@origpath).each { |f|
+                next if f =~ /^(\.|\.\.)$/ 
+                new = Node.new
+                new.source(f , @origpath , self)
+                @nodes << new
+            }
+        else
+            puts "error"
+            exit 1;
+        end
+    end
 
     def source(name, dir, parent)
         @name = name                  # my filename
@@ -77,10 +175,9 @@ class Node
         masks = config.masks_of(client)
         exclude_patterns = []
 
-
         #destname = destdir +  "/" + @name
 
-        dup = self.dup  # "shallow" copy 
+        dup = self.dup  # shallow copy
 
         dup.dir = dir
         dup.name = name
@@ -101,6 +198,7 @@ class Node
         return dup  # may not want to dup regular files?
     end
 
+
     def filter_controlfiles(client, config, nodes)
         fnodes = nodes  # filtered list of nodes
         exclude_patterns = []
@@ -108,7 +206,7 @@ class Node
 
             alist = fnodes.select { |node| node.name =~ /\.#{mask}\.a~/ }
             alist.each { |a|
-                   puts "adding " + a.name 
+                   puts "add:#{a.origpath}".green
                    a.name =~ /\.#{mask}\.a~/
                    basename = $` 
                    basename_re = Regexp.escape( basename )
@@ -119,7 +217,7 @@ class Node
 
             dlist = fnodes.select { |node| node.name =~ /\.#{mask}\.d~/ }
             dlist.each { |d|
-                   puts "delete " + d.name 
+                   puts "del:#{d.origpath}".red
                    d.name =~ /\.#{mask}\.d~/
                    basename = Regexp.escape( $` )
                    fnodes = fnodes.select { |f| f.name !~ /#{basename}(\.\w+\.[ade]~)?$/ }
@@ -127,7 +225,7 @@ class Node
 
             elist = fnodes.select { |node| node.name =~ /\.#{mask}\.e~/ }
             elist.each { |e|
-                   puts "excluding " + e.name 
+                   puts "exc:#{e.origpath}".cyan
                    e.name =~ /\.#{mask}\.e~/
                    basename =  $`
                    basename_re = Regexp.escape( basename )
@@ -136,68 +234,88 @@ class Node
                }
         }
 
+        # now remove any other remainting control files for other masks
+        fnodes = fnodes.select { |f| f.name !~ /\w+\.\w+\.[ade]~$/ }
+
         return fnodes, exclude_patterns
     end
 
 
-    def atime
-        @stat.atime
+end
+
+class Rsync
+    @rsync = '/usr/local/bin/rsync';
+
+    def self.rsync (real, client, src_root_dir, path, excludepatterns = [] )
+
+        Dir.chdir src_root_dir
+
+        command = "#{@rsync} --rsync-path=/usr/local/bin/rsync --verbose --itemize-changes --compress --archive --delete --recursive --links --relative"
+
+        #if (report)
+        #
+        #else
+
+          
+            unless (real)
+                dry_command = command.dup
+                dry_command << " --dry-run" <<  " .#{path} #{client}:/"
+                puts dry_command.on_yellow.black.bold
+                print on_yellow,black
+                self.run(dry_command)
+                puts reset
+                print "Would you like to run rsync for real? "
+                yes = (STDIN.gets =~ /^y/i)
+            end
+
+            if (real or yes)
+                real_command = command.dup
+                real_command << " .#{path} #{client}:/"
+                puts real_command.on_green.black.bold
+                print on_green,black
+                self.run(real_command)
+                puts reset
+            end
     end
 
-    def directory?
-        @stat.directory?
-    end
-
-    def file?
-        @stat.file?
-    end
-
-    def symlink?
-        @stat.symlink?
-    end
-
-    def fullpath
-        @parent ? @parent.fullpath + "/" + @name : @name
-    end
-
-    def replicate(destdir)
-        puts destdir
-        destname = destdir +  "/" + @name
-        puts destname
-        if self.file?
-            FileUtils.ln @origpath, destname
-        elsif self.directory?
-            FileUtils.mkdir destname, :mode => @stat.mode & 07777 
-            FileUtils.chown @stat.uid.to_s, @stat.gid.to_s, destname
-            @nodes.each { |n| n.replicate(destname) }
-            File.utime @stat.atime, @stat.mtime, destname 
-        elsif self.symlink?
-            FileUtils.ln_s @readlink, destname
-            File.lchown @stat.uid, @stat.gid, destname
-        else
-            puts "unknown file type! " + @origpath
-        end
+    def self.run (command)
+        system(command)
+        # IO.popen(command) { |line| ...
     end
 end
 
 
-config = Config.new(jlsync_config)
+paths_for = {}
+
+
+ARGV.each { |arg|
+    arg =~ /(.+):(\/.*)/
+    $client = $1
+    $path = $2
+    paths_for[$client] = $path
+}
+
+
+config = JlConfig.new(jlsync_config)
 source = Node.new
-source.source("", jlsync_source, nil)
+source.source_root(jlsync_source)
 
 stage = "/jlsync/stage/jlsync.rb"
 
 
-FileUtils.rm_rf(stage)
-copy = source.build_image("server94",config)
-puts source.class
-puts source.nodes[0].nodes[0].nodes[3].nodes.each {|x| puts x.name }
-puts source.nodes[0].nodes[0].nodes[3].nodes[6].name
-puts
-puts copy.class
-puts copy.nodes[0].nodes[0].nodes[3].nodes.each {|x| puts x.name }
-puts copy.nodes[0].nodes[0].nodes[3].nodes[6].name
+paths_for.each_key do |server| 
+    copy = source.build_image(server,config)
+    FileUtils.rm_rf(stage + "/" + server)
+    copy.replicate(stage + "/" + server)
+end
 
-copy.replicate(stage)
+paths_for.each_key do |server| 
+    paths_for[server].each do |path|
+        Rsync.rsync(real, server , stage + "/" + server, path, [] )
+    end
+end
+
+
+
 
 
