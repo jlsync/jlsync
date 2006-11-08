@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.111 2006/01/15 17:54:08 plastic Exp $
+# $Id: jlsync,v 1.112 2006/11/08 11:48:09 plastic Exp $
 
 use Readonly;
 use strict;
@@ -78,7 +78,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.111 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.112 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -599,7 +599,7 @@ sub filtercontrolfiles
 
     if ( defined($basenamefilter) )
     {
-        @filtered_list = grep {/^$basenamefilter/} @filtered_list;
+        @filtered_list = grep { m/^ \Q$basenamefilter\E ( \. $CONTROL_FILE_EXT_RE )? $/xms } @filtered_list;
     }
 
     my @excludepatterns;
@@ -1113,7 +1113,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.111 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.112 $)
 
 =head1 DESCRIPTION
 
