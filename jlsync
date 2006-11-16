@@ -17,7 +17,7 @@
 # GNU General Public License for more details.
 #
 #
-# $Id: jlsync,v 1.112 2006/11/08 11:48:09 plastic Exp $
+# $Id: jlsync,v 1.113 2006/11/16 17:44:43 plastic Exp $
 
 use Readonly;
 use strict;
@@ -78,7 +78,7 @@ Readonly my $CONTROL_FILE_RE => qr{
     }xms;
 
 my $VERSION;
-( $VERSION = '$Revision: 1.112 $ ' ) =~ s/[^0-9.]//g;
+( $VERSION = '$Revision: 1.113 $ ' ) =~ s/[^0-9.]//g;
 
 Readonly my $reportfrom => 'jlsync report <root>';
 
@@ -956,20 +956,23 @@ sub get
         if ($keep_controlfiles)
         {
             my $copy_from = $ntargetcontrolfiles ? $target : $srcap;
-            print ON_GREEN . "copying control files from  " . ON_WHITE . BLUE . $copy_from . RESET . ON_GREEN . "... ";
-            find(
-                sub {
-                    if (m{ $CONTROL_FILE_RE }xms)
-                    {
-                        my $copy_to = ${File::Find::name};
-                        $copy_to =~ s{$copy_from}{$stggettmppath};
-                        print "copying $File::Find::name to $copy_to \n" if $verbose;
-                        copy \1, $File::Find::name, $copy_to;
-                    }
-                },
-                $copy_from
-                );
-            print "done." . RESET . "\n";
+            if ( -d $copy_from )
+            {
+                print ON_GREEN . "copying control files from  " . ON_WHITE . BLUE . $copy_from . RESET . ON_GREEN . "... ";
+                find(
+                    sub {
+                        if (m{ $CONTROL_FILE_RE }xms)
+                        {
+                            my $copy_to = ${File::Find::name};
+                            $copy_to =~ s{$copy_from}{$stggettmppath};
+                            print "copying $File::Find::name to $copy_to \n" if $verbose;
+                            copy \1, $File::Find::name, $copy_to;
+                        }
+                    },
+                    $copy_from
+                    );
+                print "done." . RESET . "\n";
+            }
         }
 
         print ON_GREEN . "updating " . ON_WHITE . BLUE . $target . RESET . ON_GREEN . "... ";
@@ -1113,7 +1116,7 @@ jlsync - rsync wrapper to deploy files from a central repository to
 
 =head1 VERSION
 
-This documentation refers to jlsync version 2.0. ($Revision: 1.112 $)
+This documentation refers to jlsync version 2.0. ($Revision: 1.113 $)
 
 =head1 DESCRIPTION
 
