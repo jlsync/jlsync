@@ -3,7 +3,7 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.7 2006/08/11 16:31:27 plastic Exp $
+# $Id: jlsync.rb,v 1.8 2007/01/18 17:09:33 plastic Exp $
 #
 
 
@@ -90,7 +90,7 @@ end
 
 class Node 
 
-  attr_accessor :name, :dir, :parent, :imagepath, :nodes, :exclude_patterns 
+  attr_accessor :name, :dir, :parent, :imagepath, :nodes, :exclude_patterns, :erb
   attr_reader   :origpath
 
   # Stat .atime .directory? .file?  .symlink?   
@@ -106,9 +106,15 @@ class Node
     @parent ? @parent.fullpath + "/" + @name : @name
   end
 
+  def erb?
+      erb
+  end
+
   def replicate(destdir)
     destname = destdir +  "/" + @name
-    if self.file?
+    if self.erb? && self.file?
+        true
+    elsif self.file?
       FileUtils.ln @origpath, destname
     elsif self.directory?
       FileUtils.mkdir destname, :mode => @stat.mode & 07777 
@@ -150,6 +156,7 @@ class Node
     @name = name                  # my filename
     @dir = dir                    # my directory name
     @parent = parent              # link to parent directory Node
+    @erb = false                  # erb processing required? set later in filter_controlfiles
     @origpath = dir + "/" + name  # my on disk location
     @stat = File.lstat(@origpath)
     if self.directory?
@@ -198,13 +205,25 @@ class Node
     exclude_patterns = []
     config.masks_of(client).reverse.each { |mask|
 
+      rlist = fnodes.select { |node| node.name =~ /\.#{mask}\.r~/ }
+      rlist.each { |a|
+        puts "erb:#{a.origpath}".magenta
+        a.name =~ /\.#{mask}\.r~/
+        basename = $` 
+        basename_re = Regexp.escape( basename )
+        fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ader]~)?$/ }
+        a.name = basename
+        fnodes.push a
+        a.erb = true
+      }
+
       alist = fnodes.select { |node| node.name =~ /\.#{mask}\.a~/ }
       alist.each { |a|
         puts "add:#{a.origpath}".green
         a.name =~ /\.#{mask}\.a~/
         basename = $` 
         basename_re = Regexp.escape( basename )
-        fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ade]~)?$/ }
+        fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ader]~)?$/ }
         a.name = basename
         fnodes.push a
       }
@@ -214,7 +233,7 @@ class Node
         puts "del:#{d.origpath}".red
         d.name =~ /\.#{mask}\.d~/
         basename = Regexp.escape( $` )
-        fnodes = fnodes.select { |f| f.name !~ /#{basename}(\.\w+\.[ade]~)?$/ }
+        fnodes = fnodes.select { |f| f.name !~ /#{basename}(\.\w+\.[ader]~)?$/ }
       }
 
       elist = fnodes.select { |node| node.name =~ /\.#{mask}\.e~/ }
@@ -223,13 +242,13 @@ class Node
         e.name =~ /\.#{mask}\.e~/
         basename =  $`
         basename_re = Regexp.escape( basename )
-        fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ade]~)?$/ }
+        fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ader]~)?$/ }
         exclude_patterns.push basename
       }
     }
 
     # now remove any other remainting control files for other masks
-    fnodes = fnodes.select { |f| f.name !~ /\w+\.\w+\.[ade]~$/ }
+    fnodes = fnodes.select { |f| f.name !~ /\w+\.\w+\.[ader]~$/ }
 
     return fnodes, exclude_patterns
   end
@@ -279,28 +298,82 @@ class Rsync
 end
 
 
-paths_for = {}
+
+def list_of_lists_intersection(lists)
+    if lists.nil?
+        return nil
+    elsif lists.size == 1
+        return lists.shift
+    else
+        return lists.shift & list_of_lists_intersection(lists)
+    end
+end
 
 
-ARGV.each { |arg|
-  arg =~ /(.+):(\/.*)/
-  $client = $1
-  $path = $2
-  paths_for[$client] = $path
-}
+def matching_clients(clientarg, config)
+    clients = []
+
+    clientarg.split(/,/).each do |set|
+        if set =~ /^=(.*)/
+            masklist = $1
+            masks = masklist.split(/=/)
+            masks.each do |mask|
+                if config.hosts_with(mask).nil?
+                    puts "#{mask} not found in file #{jlsync_config}. exiting.".red.bold
+                    exit 1
+                end
+            end
+
+            clients |= list_of_lists_intersection(masks.map{ |mask| config.hosts_with(mask) })
+        else
+            if config.masks_of(set).nil?
+                puts "#{set} not found in file #{jlsync_config}. exiting.".red.bold
+                exit 1
+            end
+
+            clients |= [ set ]
+        end
+    end
+    return clients
+end
+
+
 
 
 config = JlConfig.new(jlsync_config)
-source = Node.new
-source.source_root(jlsync_source)
 
-stage = "/jlsync/stage/jlsync.rb"
+paths_for = {}
+
+ARGV.each { |arg|
+  arg =~ /(.+):(\/.*)/
+  clientarg = $1
+  patharg = $2
+  matching_clients(clientarg, config).each do |client|
+      paths_for[client] = patharg
+  end
+}
+
+
+source = Node.new
+print "reading #{jlsync_source} repository... "
+source.source_root(jlsync_source)
+puts "done."
+
+stage = "/jlsync/stage"
 
 
 paths_for.each_key do |server| 
+  print "Server: ".on_magenta.black, "#{server}".on_magenta.black.bold , "  masks: ".on_magenta.black
+  print config.masks_of(server).join(" ").on_magenta.blue.bold
+  print " building memory image...".on_magenta.black
+  puts 
   copy = source.build_image(server,config)
+  print "disk image ".on_magenta.black, (stage + "/" + server).on_magenta.black.bold, " deleting old...".on_magenta.black
   FileUtils.rm_rf(stage + "/" + server)
+  print ", building new... ".on_magenta.black
   copy.replicate(stage + "/" + server)
+  print "done.".on_magenta.black.bold
+  puts reset
 end
 
 paths_for.each_key do |server| 
