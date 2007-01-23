@@ -3,7 +3,7 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.8 2007/01/18 17:09:33 plastic Exp $
+# $Id: jlsync.rb,v 1.9 2007/01/23 17:32:03 plastic Exp $
 #
 
 
@@ -15,6 +15,7 @@ class String
   include Term::ANSIColor
 end
 require "fileutils"
+require 'erb'
 
 require 'getoptlong'
 real = false
@@ -88,10 +89,43 @@ class JlConfig
 end
 
 
+class NodeErbBinding
+
+  attr_accessor :name, :dir, :parent, :imagepath, :origpath, :matched_mask, :original_mask, :stat, :client
+
+  def initialize( params )
+      @name          = params[:name]
+      @dir           = params[:dir]
+      @parent        = params[:parent]
+      @imagepath     = params[:imagepath]
+      @origpath      = params[:origpath]
+      @matched_mask  = params[:matched_mask]
+      @original_mask = params[:original_mask]
+      @stat          = params[:stat]
+      @client        = params[:client]
+  end
+
+  # Stat .atime .directory? .file?  .symlink?   
+  def method_missing(method_id, *args)
+    if @stat.respond_to?(method_id)
+      @stat.send(method_id, *args)
+    else
+      super
+    end
+  end
+
+  def get_binding
+      binding
+  end
+
+end
+
+
+
 class Node 
 
-  attr_accessor :name, :dir, :parent, :imagepath, :nodes, :exclude_patterns, :erb
-  attr_reader   :origpath
+  attr_accessor :name, :dir, :parent, :imagepath, :nodes, :exclude_patterns, :erb, :erb_binding
+  attr_reader   :origpath, :stat
 
   # Stat .atime .directory? .file?  .symlink?   
   def method_missing(method_id, *args)
@@ -113,7 +147,14 @@ class Node
   def replicate(destdir)
     destname = destdir +  "/" + @name
     if self.erb? && self.file?
-        true
+      self.erb_binding.imagepath = destname
+      template = ERB.new(File.read(@origpath))
+      File.open(destname,"w") do |file|
+        file.write template.result(self.erb_binding.get_binding)
+      end
+      File.chmod @stat.mode
+      File.lchown @stat.uid, @stat.gid, destname
+      File.utime @stat.atime, @stat.mtime, destname 
     elsif self.file?
       FileUtils.ln @origpath, destname
     elsif self.directory?
@@ -187,6 +228,7 @@ class Node
 
     if self.directory?
       # need to optimise this to be top down...
+       
       # deep copy first...
       dup.nodes = dup.nodes.collect { |n|
         n.build_image(client, config, n.name, dup.imagepath, dup)
@@ -208,13 +250,15 @@ class Node
       rlist = fnodes.select { |node| node.name =~ /\.#{mask}\.r~/ }
       rlist.each { |a|
         puts "erb:#{a.origpath}".magenta
-        a.name =~ /\.#{mask}\.r~/
+        a.name =~ /\.(#{mask})\.r~/
         basename = $` 
+        original_mask = $1
         basename_re = Regexp.escape( basename )
         fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ader]~)?$/ }
         a.name = basename
         fnodes.push a
         a.erb = true
+        a.erb_binding = NodeErbBinding.new( :original_mask => original_mask, :matched_mask => mask, :name => basename, :stat => a.stat, :origpath => a.origpath, :client => client )
       }
 
       alist = fnodes.select { |node| node.name =~ /\.#{mask}\.a~/ }
