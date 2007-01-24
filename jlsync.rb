@@ -2,8 +2,8 @@
 
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
-# Copyright 2006 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.9 2007/01/23 17:32:03 plastic Exp $
+# Copyright 2006,2007 Jason Lee Pty. Ltd.
+# $Id: jlsync.rb,v 1.10 2007/01/24 18:12:52 plastic Exp $
 #
 
 
