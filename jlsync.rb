@@ -3,7 +3,7 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006,2007 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.10 2007/01/24 18:12:52 plastic Exp $
+# $Id: jlsync.rb,v 1.11 2007/01/26 17:21:36 plastic Exp $
 #
 
 
@@ -91,7 +91,7 @@ end
 
 class NodeErbBinding
 
-  attr_accessor :name, :dir, :parent, :imagepath, :origpath, :matched_mask, :original_mask, :stat, :client
+  attr_accessor :name, :dir, :parent, :imagepath, :origpath, :matched_mask, :file_mask, :stat, :client, :masks
 
   def initialize( params )
       @name          = params[:name]
@@ -100,9 +100,10 @@ class NodeErbBinding
       @imagepath     = params[:imagepath]
       @origpath      = params[:origpath]
       @matched_mask  = params[:matched_mask]
-      @original_mask = params[:original_mask]
+      @file_mask     = params[:file_mask]
       @stat          = params[:stat]
       @client        = params[:client]
+      @masks         = params[:masks]
   end
 
   # Stat .atime .directory? .file?  .symlink?   
@@ -247,46 +248,49 @@ class Node
     exclude_patterns = []
     config.masks_of(client).reverse.each { |mask|
 
-      rlist = fnodes.select { |node| node.name =~ /\.#{mask}\.r~/ }
-      rlist.each { |a|
-        puts "erb:#{a.origpath}".magenta
-        a.name =~ /\.(#{mask})\.r~/
-        basename = $` 
-        original_mask = $1
+      mask_re = / ( (\w+,)* #{mask} (,\w+)* ) /x
+      control_re = / \. (\w+,)* \w+ \. (a|d|e|r) ~ $  /x
+
+      r_re = Regexp.new( "\." + mask_re.to_s + "\.r~$" )
+      rlist = fnodes.select { |node| node.name =~ r_re }
+      rlist.each { |r|
+        puts "erb: #{r.origpath}".magenta
+        basename = r_re.match(r.name).pre_match 
         basename_re = Regexp.escape( basename )
-        fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ader]~)?$/ }
-        a.name = basename
-        fnodes.push a
-        a.erb = true
-        a.erb_binding = NodeErbBinding.new( :original_mask => original_mask, :matched_mask => mask, :name => basename, :stat => a.stat, :origpath => a.origpath, :client => client )
+        file_mask = r_re.match(r.name)[1]
+
+        fnodes = fnodes.select { |f| f.name !~ Regexp.new( basename_re.to_s + control_re.to_s ) }
+        r.name = basename
+        r.erb = true
+        r.erb_binding = NodeErbBinding.new( :file_mask => file_mask, :matched_mask => mask, :name => basename, :stat => r.stat, :origpath => r.origpath, :client => client, :masks => config.masks_of(client) )
+        fnodes.push r
       }
 
-      alist = fnodes.select { |node| node.name =~ /\.#{mask}\.a~/ }
+      a_re = Regexp.new( "\." + mask_re.to_s + "\.a~$" )
+      alist = fnodes.select { |node| node.name =~ a_re }
       alist.each { |a|
-        puts "add:#{a.origpath}".green
-        a.name =~ /\.#{mask}\.a~/
-        basename = $` 
+        puts "add: #{a.origpath}".green
+        basename = a_re.match(a.name).pre_match 
         basename_re = Regexp.escape( basename )
-        fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ader]~)?$/ }
+        fnodes = fnodes.select { |f| f.name !~ Regexp.new( basename_re.to_s + control_re.to_s ) }
         a.name = basename
         fnodes.push a
       }
 
-      dlist = fnodes.select { |node| node.name =~ /\.#{mask}\.d~/ }
+      d_re = Regexp.new( "\." + mask_re.to_s + "\.d~$" )
+      dlist = fnodes.select { |node| node.name =~ d_re }
       dlist.each { |d|
-        puts "del:#{d.origpath}".red
-        d.name =~ /\.#{mask}\.d~/
-        basename = Regexp.escape( $` )
-        fnodes = fnodes.select { |f| f.name !~ /#{basename}(\.\w+\.[ader]~)?$/ }
+        puts "del: #{d.origpath}".red
+        basename_re = Regexp.escape( d_re.match(d.name).pre_match )
+        fnodes = fnodes.select { |f| f.name !~ Regexp.new( basename_re.to_s + control_re.to_s ) }
       }
 
+      e_re = Regexp.new( "\." +  mask_re.to_s + "\.e~$" )
       elist = fnodes.select { |node| node.name =~ /\.#{mask}\.e~/ }
       elist.each { |e|
-        puts "exc:#{e.origpath}".cyan
-        e.name =~ /\.#{mask}\.e~/
-        basename =  $`
-        basename_re = Regexp.escape( basename )
-        fnodes = fnodes.select { |f| f.name !~ /#{basename_re}(\.\w+\.[ader]~)?$/ }
+        puts "exc: #{e.origpath}".cyan
+        basename_re = Regexp.escape( e_re.match(e.name).pre_match )
+        fnodes = fnodes.select { |f| f.name !~ Regexp.new( basename_re.to_s + control_re.to_s ) }
         exclude_patterns.push basename
       }
     }
