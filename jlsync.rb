@@ -3,7 +3,7 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006,2007 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.11 2007/01/26 17:21:36 plastic Exp $
+# $Id: jlsync.rb,v 1.12 2007/02/17 12:11:28 plastic Exp $
 #
 
 
@@ -138,7 +138,7 @@ class Node
   end
 
   def fullpath
-    @parent ? @parent.fullpath + "/" + @name : @name
+    @parent ? File.join(@parent.fullpath, @name) : @name
   end
 
   def erb?
@@ -146,7 +146,7 @@ class Node
   end
 
   def replicate(destdir)
-    destname = destdir +  "/" + @name
+    destname = File.join(destdir, @name)
     if self.erb? && self.file?
       self.erb_binding.imagepath = destname
       template = ERB.new(File.read(@origpath))
@@ -199,7 +199,7 @@ class Node
     @dir = dir                    # my directory name
     @parent = parent              # link to parent directory Node
     @erb = false                  # erb processing required? set later in filter_controlfiles
-    @origpath = dir + "/" + name  # my on disk location
+    @origpath = File.join(dir, name)  # my on disk location
     @stat = File.lstat(@origpath)
     if self.directory?
       @nodes = []               # directory entries
@@ -218,14 +218,14 @@ class Node
     masks = config.masks_of(client)
     exclude_patterns = []
 
-    #destname = destdir +  "/" + @name
+    #destname = File.join(destdir, @name)
 
     dup = self.dup  # shallow copy
 
     dup.dir = dir
     dup.name = name
     dup.parent = parent
-    dup.imagepath = dir +  "/" + name
+    dup.imagepath = File.join(dir, name)
 
     if self.directory?
       # need to optimise this to be top down...
@@ -416,17 +416,17 @@ paths_for.each_key do |server|
   print " building memory image...".on_magenta.black
   puts 
   copy = source.build_image(server,config)
-  print "disk image ".on_magenta.black, (stage + "/" + server).on_magenta.black.bold, " deleting old...".on_magenta.black
-  FileUtils.rm_rf(stage + "/" + server)
+  print "disk image ".on_magenta.black, File.join(stage, server).on_magenta.black.bold, " deleting old...".on_magenta.black
+  FileUtils.rm_rf(File.join(stage, server))
   print ", building new... ".on_magenta.black
-  copy.replicate(stage + "/" + server)
+  copy.replicate(File.join(stage, server))
   print "done.".on_magenta.black.bold
   puts reset
 end
 
 paths_for.each_key do |server| 
   paths_for[server].each do |path|
-    Rsync.rsync(real, server , stage + "/" + server, path, [] )
+    Rsync.rsync(real, server , File.join(stage,server), path, [] )
     end
 end
 
