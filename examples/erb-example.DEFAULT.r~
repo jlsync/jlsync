@@ -1,0 +1,19 @@
+
+Hello
+
+jlsync generation time is <%= Time.now.to_s %>
+file mtime is is <%= @stat.mtime.to_s %>
+
+client is <%= @client %>
+masks are <%= @masks.join(" ") %>
+matched_mask is <%= @matched_mask %>
+file_mask is <%= @file_mask %>
+origpath is <%= @origpath %>
+imagepath is <%= @imagepath %>
+
+name is <%= @name %>
+
+
+self.instance_variables are <%= self.instance_variables.join(" ") %>
+
+Goodbye

@@ -3,7 +3,7 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006,2007 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.12 2007/02/17 12:11:28 plastic Exp $
+# $Id: jlsync.rb,v 1.13 2007/02/27 13:58:09 plastic Exp $
 #
 
 
@@ -286,10 +286,11 @@ class Node
       }
 
       e_re = Regexp.new( "\." +  mask_re.to_s + "\.e~$" )
-      elist = fnodes.select { |node| node.name =~ /\.#{mask}\.e~/ }
+      elist = fnodes.select { |node| node.name =~ e_re }
       elist.each { |e|
         puts "exc: #{e.origpath}".cyan
-        basename_re = Regexp.escape( e_re.match(e.name).pre_match )
+        basename =  e_re.match(e.name).pre_match 
+        basename_re = Regexp.escape( basename )
         fnodes = fnodes.select { |f| f.name !~ Regexp.new( basename_re.to_s + control_re.to_s ) }
         exclude_patterns.push basename
       }
