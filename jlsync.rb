@@ -3,7 +3,7 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006,2007 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.13 2007/02/27 13:58:09 plastic Exp $
+# $Id: jlsync.rb,v 1.14 2007/02/27 16:32:49 plastic Exp $
 #
 
 
@@ -49,7 +49,6 @@ jlsync_source = "/jlsync/source"
 
 # Turn of the coloring
 Term::ANSIColor::coloring = false if (nocolor or (not STDOUT.isatty))
-
 
 
 
@@ -393,12 +392,25 @@ config = JlConfig.new(jlsync_config)
 
 paths_for = {}
 
+lastclient = nil
+lastdir = nil
+
 ARGV.each { |arg|
-  arg =~ /(.+):(\/.*)/
-  clientarg = $1
-  patharg = $2
+  if  arg =~ /(.+):(\/.*)/ 
+     lastclient = clientarg = $1
+     patharg = $2
+     lastdir = File.dirname(patharg)
+  elsif arg =~ /^\/.*/
+     clientarg = lastclient 
+     patharg = arg
+     lastdir = File.dirname(patharg)
+  else
+     clientarg = lastclient 
+     patharg = File.join(lastdir,arg)
+  end
+
   matching_clients(clientarg, config).each do |client|
-      paths_for[client] = patharg
+      paths_for[client] = (( paths_for[client].nil? ? [] :  paths_for[client] ) << patharg ).uniq
   end
 }
 
