@@ -3,7 +3,7 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006,2007 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.14 2007/02/27 16:32:49 plastic Exp $
+# $Id: jlsync.rb,v 1.15 2007/02/28 17:55:08 plastic Exp $
 #
 
 
@@ -19,18 +19,25 @@ require 'erb'
 
 require 'getoptlong'
 real = false
+get  = false
 getmask  = nil
 nocolor = false
 eport = false
 email = nil
 
-opts = GetoptLong.new( [ "--real", "-r",           GetoptLong::NO_ARGUMENT], [ "--mask", "-m",           GetoptLong::REQUIRED_ARGUMENT], [ "--nocolor", "-n",        GetoptLong::NO_ARGUMENT], [ "--report",                GetoptLong::NO_ARGUMENT], [ "--email", "-e",          GetoptLong::REQUIRED_ARGUMENT])
+opts = GetoptLong.new( [ "--real", "-r",           GetoptLong::NO_ARGUMENT], 
+                       [ "--get", "-g",           GetoptLong::REQUIRED_ARGUMENT], 
+                       [ "--nocolor", "-n",        GetoptLong::NO_ARGUMENT], 
+                       [ "--report",                GetoptLong::NO_ARGUMENT], 
+                       [ "--email", "-e",          GetoptLong::REQUIRED_ARGUMENT]
+                     )
 
 opts.each do |opt, arg|
   case opt
   when "--real" 
     real = true
-  when "--mask"
+  when "--get"
+    get = true
     getmask = arg
   when "--nocolor"
     nocolor = true
@@ -46,6 +53,10 @@ end
 
 jlsync_config = "/jlsync/etc/jlsync.config"
 jlsync_source = "/jlsync/source"
+
+class Rsync
+  @rsync = '/usr/local/bin/rsync';
+end
 
 # Turn of the coloring
 Term::ANSIColor::coloring = false if (nocolor or (not STDOUT.isatty))
@@ -305,7 +316,7 @@ class Node
 end
 
 class Rsync
-  @rsync = '/usr/local/bin/rsync';
+  # @rsync is defined above in configuration section
 
   def self.rsync (real, client, src_root_dir, path, excludepatterns = [] )
 
@@ -343,6 +354,18 @@ class Rsync
     system(command)
     # IO.popen(command) { |line| ...
   end
+
+  # TODO
+  def self.get (real, client, src_root_dir, path, excludepatterns = [] )
+
+    puts "TODO"
+
+    #Dir.chdir src_root_dir
+
+    #command = "#{@rsync} --rsync-path=/usr/local/bin/rsync --verbose --itemize-changes --compress --archive --delete --recursive --links --relative"
+
+  end
+
 end
 
 
@@ -384,8 +407,6 @@ def matching_clients(clientarg, config)
     end
     return clients
 end
-
-
 
 
 config = JlConfig.new(jlsync_config)
@@ -439,8 +460,12 @@ end
 
 paths_for.each_key do |server| 
   paths_for[server].each do |path|
-    Rsync.rsync(real, server , File.join(stage,server), path, [] )
+    if get
+      Rsync.get(real, server , File.join(stage,server), path, [] )
+    else
+      Rsync.rsync(real, server , File.join(stage,server), path, [] )
     end
+  end
 end
 
 
