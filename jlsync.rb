@@ -3,7 +3,7 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006,2007 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.16 2007/09/29 14:07:15 plastic Exp $
+# $Id: jlsync.rb,v 1.17 2007/09/29 14:25:34 plastic Exp $
 #
 # == NAME
 # 
@@ -23,7 +23,7 @@
 # 
 # == VERSION
 # 
-# This documentation refers to jlsync version 3.0. ($Revision: 1.16 $)
+# This documentation refers to jlsync version 3.0. ($Revision: 1.17 $)
 # 
 # == DESCRIPTION
 # 
@@ -159,13 +159,30 @@
 # === Control Files
 # 
 # 
-# ==== the Add .templatename.a~ controlfile
+# ==== the Add .a~ control file
 # 
 # Files and/or directories from the repository for a given template with
-# with Add control file suffix, <tt>.templatename.a~</tt> , get added to the final
-# staging image for clients that subscribe to I<templatename>.
+# with Add control file suffix, <tt>.templatename.a~</tt> , get added to
+# the final staging image for clients that subscribe to I<templatename>.
 # 
-# ==== the Delete .templatename.d~ controlfile
+# ==== the Erb .r~ control file
+# 
+# File templates from the repository for a given template with with Erb
+# control file suffix, <tt>.templatename.a~</tt> , are processed by erb
+# and the resulting file added to the final staging image for clients
+# that subscribe to I<templatename>.
+# 
+# Erb processing occurs with following instance variables available.
+# * file_mask - the full file mask from the repository
+# * matched_mask - the matched mask causing this file to be processed
+# * name - the basename of the file (without .mask.r~ appended) 
+# * stat - File.stat object 
+# * origpath - the original path
+# * client - the client name the file is being processed for.
+# * masks - the masks list for the client from jlsync.config
+# 
+#
+# ==== the Delete .d~ control file
 # 
 # If a file with the Delete control file suffix exists in the repository
 # then the corresponding file or directory with the same basename will
@@ -178,7 +195,7 @@
 # The easiest way to create Delete and Exclude control files is to simply
 # "touch" them.
 # 
-# ==== the Exclude .templatename.e~ controlfile
+# ==== the Exclude .templatename.e~ control file
 # 
 # Files with Exclude suffix, <tt>.templatename.e~</tt> , are added to the list
 # of files to be excluded from the rsync comparision. Any files or
@@ -464,7 +481,7 @@ class Node
   attr_accessor :name, :dir, :parent, :imagepath, :nodes, :exclude_patterns, :erb, :erb_binding
   attr_reader   :origpath, :stat
 
-  # Stat .atime .directory? .file?  .symlink?   
+  # map Stat methods such as .atime .directory? .file? .symlink?   
   def method_missing(method_id, *args)
     if @stat.respond_to?(method_id)
       @stat.send(method_id, *args)
