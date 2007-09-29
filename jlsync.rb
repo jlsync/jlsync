@@ -3,13 +3,339 @@
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006,2007 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.15 2007/02/28 17:55:08 plastic Exp $
+# $Id: jlsync.rb,v 1.16 2007/09/29 14:07:15 plastic Exp $
 #
+# == NAME
+# 
+# jlsync - rsync wrapper to deploy files from a central repository to
+# client hosts and for ongoing configuration management.
+# 
+# == SYNOPSIS
+# 
+#  jlsync [--real] [--nocolor] [--verbose] clienthost:/path/to/pushout 
+#          [clienthost2:/another/path2/pushout]...
+# 
+#  jlsync --get [--real] [--mask=NAME] clienthost:/path/to/pullin
+#          [clienthost2:/another/path2/pullin]...
+# 
+#  jlsync --report [--email=address] clienthost:/path/to/check 
+#          [clienthost2:/another/path2/check]...
+# 
+# == VERSION
+# 
+# This documentation refers to jlsync version 3.0. ($Revision: 1.16 $)
+# 
+# == DESCRIPTION
+# 
+# jlsync is a rsync wrapper that allows files and directories to be
+# syncronised from a central repository to many client hosts. jlsync can
+# be used for initial installation and also for ongoing configuration
+# managment. Files can be grouped into file templates that individual
+# client hosts can "subscribe" to. The repository is constructed from
+# regular unix files and directories (package management formats like
+# rpm, deb, pkg are not required or directly supported). The repository
+# supports special template files using the erb (embeded ruby) format.
+# jlsync works well with ssh key authentication to avoid rsync over ssh
+# being prompted for remote client root passwords.
+# 
+# == OPTIONS
+# 
+# <tt>--nocolor</tt> turns of color text highlighting. By default rsync commands
+# and other actions are highlighted in different colors.
+# 
+# <tt>--verbose</tt> turn on more debug output.
+# 
+# <tt>--get</tt> pull files from the remote client into the repository (instead
+# of the default behaviour which is to push out files form the
+# repository).
+# 
+# <tt>--real</tt> do not prompt for confirmation of actions. Use this option
+# with caution!
+# 
+# <tt>--mask=template_name</tt> when pulling files from a remote client put them
+# into the repostitory with and add mask of template_name.
+# 
+# <tt>--report</tt> print out a report of differences between client pathnames
+# and staging image taken using the rsync --dry-run output.
+# 
+# <tt>--email=address</tt> Report is emailed to the email address "address"
+# instead of being printed out.
+# 
+# 
+# == BASIC USAGE
+# 
+# To distribute /usr/java from the repository to a host called jav04
+# run the following commands:
+# 
+# First run
+# 
+#  jlsync jav04:/usr/java  
+# 
+# this will build a staging image for jav04 and then do a rsync --dry-run
+# of +/usr/java+ to jav04. Look closely at the output to verify the
+# additions and deletions on the remote host are as expected. You will
+# then be prompted with "would you like to run rsync now for real? ".
+# Answer yes to run rsync again without the --dry-run rysnc option (ie. go
+# ahead and make changes to client for "real").
+# 
+# Only if you're 100% sure that jlsync is going add and delete
+# the correct files you can run with the <tt>--real</tt> option
+# 
+#  jlsync --real jav04:/usr/java
+# 
+# when the <tt>--real</tt> option you are not prompted and rsync to the client
+# does not use the rsync --dry-run option. BE CAREFUL, incorrect usage or
+# incorrect configuration in the repository could easily result in the
+# permanent deletion of important files on the client.
+# 
+# === Getting remote files into the repository
+# 
+# To quickly gather files and/or directories from a remote host back 
+# into the repostory the <tt>--get</tt> option can be used. 
+# A specific template for the gathered files can be named with the
+# <tt>--mask</tt> option.  For example to get a freshly installed httpd binary
+# back from client host web01 into the repostory for the file template
+# "WEBSERVERS" run
+# 
+#  jlsync --get --mask=WEBSERVERS web01:/usr/local/apache/bin/httpd
+# 
+# This will result in <tt>usr/local/apache/bin/httpd.WEBSERVERS.a~</tt> being
+# added to the repostitory.  Once the file is in the repository it can be
+# deployed to other clients that subscribe to the WEBSERVERS template.
+# 
+# Files can be gathered into the special DEFAULT file template
+# 
+#  jlsync --get --mask=DEFAULT  holly:/usr/local/bin/rsync
+# 
+# will result in <tt>usr/local/bin/rsync</tt> being added to the repostitory.
+# 
+# When a <tt>--mask</tt> option is not given gathered files will be added to the
+# clients own host template. e.g.
+# 
+#  jlsync --get goanna:/etc/hosts
+# 
+# would result in <tt>etc/hosts.goanna.a~</tt> being added to the repository. 
+# 
+# === The config file
+# 
+# Each client host has an entry in the <tt>jlsync.config</tt> file that lists
+# the file templates that it subscribes to. A template is made up of
+# files and control files in the repository that share same template/mask
+# name.  Using templates is a convenient way of grouping files that
+# should only be deployed to a certain category of hosts such as "web
+# servers" or "database servers".
+# 
+# Every client must subscribe to the base template called DEFAULT.  Also
+# each client also must subscribe to a template that is the same as that
+# client's hostname.
+# 
+# Templates filesets are layered one upon another to build the jlsync
+# client image in the staging area before the image is rsync'ed to the
+# client.  The control files for templates are applied in reverse order
+# as they are listed in the control file, ie. right to left. So when
+# multiple control files with the same basename exist the most
+# significate control file is used. Hostname control files are always the
+# most significant and the DEFAULT control files are always the least
+# significant.
+# 
+# The following example <tt>jlsync.config</tt> entry shows a host, jav04, entry
+# that only contains the minimum of the DEFAULT template and it's own
+# template.
+# 
+#  DEFAULT      jav04
+# 
+# The next example <tt>jlsync.config</tt> entry shows a host, www05, who's final
+# file image is made up of 3 additional file templates
+# 
+#  DEFAULT WEBSERVERS prodservers london www05
+# 
+# === The respository 
+# 
+# All the files for the all the file templates are stored in the
+# repostitory under the same directory root. Control files for
+# different templates are named with filename suffix <tt>.templatename.X~</tt>
+# notation. Files in the DEFAULT template don't need the suffix notation.
+# 
+# === Control Files
+# 
+# 
+# ==== the Add .templatename.a~ controlfile
+# 
+# Files and/or directories from the repository for a given template with
+# with Add control file suffix, <tt>.templatename.a~</tt> , get added to the final
+# staging image for clients that subscribe to I<templatename>.
+# 
+# ==== the Delete .templatename.d~ controlfile
+# 
+# If a file with the Delete control file suffix exists in the repository
+# then the corresponding file or directory with the same basename will
+# not be added the staging image for that client.
+# 
+# Rsync will delete files on remote hosts that aren't found in the local
+# file image (that is unless they have also been excluded from the rsync
+# comparision).
+# 
+# The easiest way to create Delete and Exclude control files is to simply
+# "touch" them.
+# 
+# ==== the Exclude .templatename.e~ controlfile
+# 
+# Files with Exclude suffix, <tt>.templatename.e~</tt> , are added to the list
+# of files to be excluded from the rsync comparision. Any files or
+# directories that are excluded will not be deployed from the staging
+# area or updated/deleted from the client host.
+# 
+# The following Exclude file will cause the <tt>/var/run/sendmail.pid</tt> file
+# to be be ignored (left alone) by the rsync for all client hosts
+# 
+# 
+#  /var/run/sendmail.pid.DEFAULT.e~
+# 
+# This next exclude bontrol file will cause the entire <tt>/var/mysql</tt>
+# directory to be ignored for any client hosts that are listed with the
+# "databaseservers" template in the jlsync.config file.
+# 
+#  /var/mysql.databaseservers.e~
+# 
+# Exclude control files can also contain regular expressions (as defined
+# and used by rsync) to match multiple files. For example, to exclude any
+# file ending in .pid in <tt>/app/sendSMS</tt> use
+# 
+#  /app/sendSMS/*.pid.DEFAULT.e~
+# 
+# To exclude the syslogd messages files (messages, messages.1, etc.) you
+# could use
+# 
+#  /var/log/messages*.DEFAULT.e~
+# 
+# To exlude all files in a directory (but make sure the directory is part
+# of the template) use something like
+# 
+#  /var/mysql/*.databaseservers.e~
+# 
+# == ADVANCED USAGE
+# 
+# Multiple files from the same client can be deployed at the same time
+#       
+#  jlsync jav04:/etc/passwd jav04:/etc/shadow
+# 
+# this style of usage is useful when base directory of the files is not
+# fully syncronised with the repository. It's also quicker than two
+# individual invocations of jlsync as the staging image is only built
+# once.
+# 
+# Multiple clients can be deployed in a single command
+# 
+#  jlsync jav03:/opt/apache jav04:/opt/apache
+# 
+# with this sytle of usage the staging image for each client will be
+# built first before files are deployed.
+# 
+# Any combination of host:/path arguments can be used on the jlsync 
+# command line. e.g.
+# 
+#  jlsync db01:/u01 nfs1:/export anyhost:/any/path
+# 
+# === Advanced Control Files
+# 
+# A control file can belong to multiple masks at once by separating the
+# masks with a comma "," e.g.
+# 
+#  /opt/apache.www3,www4.a~
+# and
+#  /etc/motd.INTERNAL,EXTERNAL,DMZ.e~
+# 
+# === Advanced command line with multiple hosts
+# 
+# When the same path needs to be jlsynced to multiple hosts those hosts 
+# can given as a single comma separated list prior to the path. e.g.
+# 
+#  jlsync sol01,sol02,sol03,sol04,sol05,sol06,sol07:/opt/csw
+# 
+# === Advanced command line with matching template/mask names
+# 
+# The <tt>=templatename:/path</tt> command line notation can be used to match
+# all hosts that "subscribe" to that templatename in the jlsync.config
+# file. For example to select all hosts that have the SOLARIS template
+# listed in as part configuration in jlsync.config the following could be
+# used.
+# 
+#  jlsync =SOLARIS:/etc/nscd.conf
+# 
+# And because all hosts must subscribe to the DEFAULT template the
+# following will jlsync to all configured hosts
+# 
+#  jlsync =DEFAULT:/etc/issue
+# 
+# It's possible to get the intersection of muliple templates by chaining
+# them together. For example the following would match all production
+# debian hosts in newyork
+# 
+#  jlsync =PROD=DEBIAN=newyork:/usr/local/etc/timezone
+# 
+# To get the union of multiple templates you can separate them by
+# commas.  e.g. All hosts in London and Melbourne
+# 
+#  jlsync =LONDON,=MELBOURNE:/etc/passwd =LONDON,=MELBOURNE:/etc/shadow
+# 
+# == REPORT OPTION
+# 
+# Ad-hoc filesystem changes made on a client can cause it's configuration
+# to "drift" away from it's jlsync repository configuration. The
+# <tt>--report</tt> option can help maintain discipline over client and jlsync
+# repository changes by reporting any differences found. e.g.
+# 
+#  jlsync --report bill:/usr/local ben:/usr/local
+# 
+# will generate an onscreen report of changes between the <tt>/usr/local</tt>
+# directors on clients bill and ben and the repository. Using the
+# <tt>--email</tt> option will cause the report to be sent via email e.g.
+# 
+#  jlsync --report --email=admin@company.com mailhub:/etc/mail
+# 
+# Scheduling jlsync reports in cron can be a useful way to keep an eye on
+# client/repository drift.
+# 
+# == ABSOLUTELY NO WARRANTY
+# 
+# Because the program is licensed free of charge, there is no warranty
+# for the program, to the extent permitted by applicable law. Except when
+# otherwise stated in writing the copyright holders and/or other parties
+# provide the program "as is" without warranty of any kind, either
+# expressed or implied, including, but not limited to, the implied
+# warranties of merchantability and fitness for a particular purpose. The
+# entire risk as to the quality and performance of the program is with
+# you. Should the program prove defective, you assume the cost of all
+# necessary servicing, repair or correction.
+# 
+# In no event unless required by applicable law or agreed to in writing
+# will any copyright holder, or any other party who may modify and/or
+# redistribute the program as permitted above, be liable to you for
+# damages, including any general, special, incidental or consequential
+# damages arising out of the use or inability to use the program
+# (INCLUDING BUT NOT LIMITED TO LOSS OF DATA or DATA BEING RENDERED
+# INACCURATE or losses sustained by you or third parties or a failure of
+# the program to operate with any other programs), even if such holder or
+# other party has been advised of the possibility of such damages.
+# 
+# == BUGS
+# 
+# yes there are few bugs. 
+# 
+# == SEE ALSO
+# 
+# The rsync(1) man page.
+# The jlsync website http://www.jlsync.com/
+# 
+# == AUTHOR
+# 
+# Jason Lee
+# 
 
 
 
 require 'rubygems'
-require_gem 'term-ansicolor'
+require 'term-ansicolor'
 include Term::ANSIColor
 class String
   include Term::ANSIColor
@@ -467,8 +793,5 @@ paths_for.each_key do |server|
     end
   end
 end
-
-
-
 
 
