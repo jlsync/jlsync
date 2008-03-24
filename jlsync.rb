@@ -1,9 +1,11 @@
-#!/usr/local/bin/ruby -w
+#!/usr/bin/env ruby -w
+
+#BUG: get deep path where parent dir does not exist in repostitory.
 
 # jlsync.rb - jlsync in ruby
 # Jason Lee, jlsync@jason-lee.net.au, 
 # Copyright 2006,2007 Jason Lee Pty. Ltd.
-# $Id: jlsync.rb,v 1.17 2007/09/29 14:25:34 plastic Exp $
+# $Id: jlsync.rb,v 1.18 2008/03/24 11:23:38 plastic Exp $
 #
 # == NAME
 # 
@@ -23,7 +25,7 @@
 # 
 # == VERSION
 # 
-# This documentation refers to jlsync version 3.0. ($Revision: 1.17 $)
+# This documentation refers to jlsync version 3.0. ($Revision: 1.18 $)
 # 
 # == DESCRIPTION
 # 
@@ -352,7 +354,7 @@
 
 
 require 'rubygems'
-require 'term-ansicolor'
+require 'term/ansicolor'
 include Term::ANSIColor
 class String
   include Term::ANSIColor
